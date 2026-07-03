@@ -7,6 +7,7 @@ export interface Events {
   'origin:shifted': { offset: THREE.Vector3 };
   'player:landed': { speed: number };
   'player:step': { biome: number };
+  'weather:lightning': { delaySec: number };
 }
 
 type Handler<K extends keyof Events> = (payload: Events[K]) => void;

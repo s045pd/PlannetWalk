@@ -11,6 +11,8 @@ import { Stars } from './sky/Stars';
 import { DebrisRing } from './sky/DebrisRing';
 import { PostFX } from './fx/PostFX';
 import { WeatherSystem } from './weather/WeatherSystem';
+import { Particles } from './weather/Particles';
+import { Lightning } from './weather/Lightning';
 import type { WeatherName } from './weather/weatherStates';
 
 const SEED = 20260703;
@@ -63,6 +65,8 @@ async function init(): Promise<void> {
 
   const physics = await Physics.create(terrain, origin, worldFocus);
   const weather = new WeatherSystem(engine, dayNight, sky, terrain);
+  const particles = new Particles(engine, weather, SEED);
+  const lightning = new Lightning(engine, sky, weather);
   const player = new Player(engine, physics, origin, spawnWorld.clone());
   player.yaw = Math.atan2(spawnWorld.x - city.x, spawnWorld.z - city.z);
   playerRef = player;
@@ -74,6 +78,8 @@ async function init(): Promise<void> {
   engine.add(terrain);
   engine.add(dayNight);
   engine.add(weather);
+  engine.add(particles);
+  engine.add(lightning);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
