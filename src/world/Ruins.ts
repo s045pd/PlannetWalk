@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { citySiteAt, CITY_CELL, type CitySite } from './citySites';
-import { buildRuinedTower } from './Building';
+import { buildRuinedTower, type BoxDef } from './Building';
 import { mulberry32 } from './noise';
 import type { Heightfield } from './heightfield';
 import type { FloatingOrigin } from './FloatingOrigin';
@@ -17,6 +17,7 @@ interface BuildingRec {
   y: number;
   rotY: number;
   half: { x: number; y: number; z: number };
+  colliders: BoxDef[];
   body: RAPIER.RigidBody | null;
 }
 
@@ -165,12 +166,12 @@ export class Ruins {
         const bx = site.x + px + jx;
         const bz = site.z + pz + jz;
         const by = this.hf.height(bx, bz);
-        const { geometry, halfExtents } = buildRuinedTower(rng, 14 + rng() * 10);
+        const { geometry, halfExtents, colliders } = buildRuinedTower(rng, 14 + rng() * 10);
         const rotY = site.rot + (rng() - 0.5) * 0.12;
         geometry.rotateY(rotY);
         geometry.translate(bx - site.x, by - baseY, bz - site.z);
         geos.push(geometry);
-        buildings.push({ x: bx, z: bz, y: by, rotY, half: halfExtents, body: null });
+        buildings.push({ x: bx, z: bz, y: by, rotY, half: halfExtents, colliders, body: null });
         // 楼旁街道散布物
         if (rng() < 0.6)
           propSpots.push({
@@ -300,21 +301,24 @@ export class Ruins {
       for (const b of rec.buildings) {
         const dist = Math.hypot(b.x - f.x, b.z - f.z);
         if (dist < COLLIDER_RANGE && !b.body) {
+          // 单刚体多碰撞盒：盒位置为楼宇局部坐标，刚体承载整体旋转
           const body = this.physics.world.createRigidBody(
             RAPIER.RigidBodyDesc.fixed()
               .setTranslation(
                 b.x - this.origin.totalOffset.x,
-                b.y + b.half.y,
+                b.y,
                 b.z - this.origin.totalOffset.z,
               )
               .setRotation(
                 new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), b.rotY),
               ),
           );
-          this.physics.world.createCollider(
-            RAPIER.ColliderDesc.cuboid(b.half.x, b.half.y, b.half.z),
-            body,
-          );
+          for (const c of b.colliders) {
+            this.physics.world.createCollider(
+              RAPIER.ColliderDesc.cuboid(c.hx, c.hy, c.hz).setTranslation(c.x, c.y, c.z),
+              body,
+            );
+          }
           b.body = body;
         } else if (dist >= COLLIDER_RANGE + 60 && b.body) {
           this.physics.world.removeRigidBody(b.body);
