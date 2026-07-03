@@ -93,7 +93,16 @@ export function createDebugPanel(engine: Engine): void {
     'position:fixed;left:26px;top:60px;z-index:40;background:rgba(4,14,22,.85);' +
     'border:1px solid rgba(159,232,255,.3);border-radius:4px;padding:10px 12px;' +
     'font:12px monospace;color:#9fe8ff;display:none;min-width:220px';
-  const weathers = ['CLEAR', 'HAZE', 'DUST_STORM', 'ACID_RAIN', 'THUNDERSTORM', 'ASHFALL', 'FOG'];
+  const weathers = [
+    'CLEAR',
+    'HAZE',
+    'DUST_STORM',
+    'ACID_RAIN',
+    'THUNDERSTORM',
+    'ASHFALL',
+    'FOG',
+    'AURORA',
+  ];
   el.innerHTML =
     `<div style="opacity:.6;margin-bottom:6px">DEBUG</div>` +
     `<div id="dbg-stats" style="margin-bottom:8px"></div>` +
@@ -132,9 +141,16 @@ export function createDebugPanel(engine: Engine): void {
 
   // 数字键 1-7 直接切天气
   window.addEventListener('keydown', (e) => {
-    const idx = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'].indexOf(
-      e.code,
-    );
+    const idx = [
+      'Digit1',
+      'Digit2',
+      'Digit3',
+      'Digit4',
+      'Digit5',
+      'Digit6',
+      'Digit7',
+      'Digit8',
+    ].indexOf(e.code);
     if (idx >= 0) window.__game.setWeather?.(weathers[idx], 6);
   });
 }

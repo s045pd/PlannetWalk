@@ -10,6 +10,7 @@ import { Sky } from './sky/Sky';
 import { DayNight } from './sky/DayNight';
 import { Stars } from './sky/Stars';
 import { DebrisRing } from './sky/DebrisRing';
+import { Aurora } from './sky/Aurora';
 import { PostFX } from './fx/PostFX';
 import { Ruins } from './world/Ruins';
 import { Scatter } from './world/Scatter';
@@ -88,6 +89,7 @@ async function init(): Promise<void> {
   const particles = new Particles(engine, weather, SEED);
   const player = new Player(engine, physics, origin, spawnWorld.clone());
   const lightning = new Lightning(engine, sky, weather, player, terrain);
+  const aurora = new Aurora(engine, weather, dayNight);
   player.yaw = Math.atan2(spawnWorld.x - city.x, spawnWorld.z - city.z);
   playerRef = player;
 
@@ -193,6 +195,7 @@ async function init(): Promise<void> {
   engine.add(weather);
   engine.add(particles);
   engine.add(lightning);
+  engine.add(aurora);
   engine.add(logPickups);
   engine.add(poiManager);
   engine.add(hud);
