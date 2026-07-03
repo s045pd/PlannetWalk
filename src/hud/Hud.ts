@@ -7,6 +7,7 @@ import type { Terrain } from '../world/Terrain';
 import type { WeatherSystem } from '../weather/WeatherSystem';
 import type { VehicleManager } from '../vehicles/Rideable';
 import type { FloatingOrigin } from '../world/FloatingOrigin';
+import type { LogPickups } from '../story/LogPickups';
 
 const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const TMP_EULER = new THREE.Euler();
@@ -25,7 +26,12 @@ export class Hud {
   private time: HTMLElement;
   private warning: HTMLElement;
   private prompt: HTMLElement;
+  private logPanel: HTMLElement;
+  private logBody: HTMLElement;
   private updateTimer = 0;
+  private typeText = '';
+  private typeShown = 0;
+  private logHold = 0;
 
   constructor(
     private engine: Engine,
@@ -35,6 +41,7 @@ export class Hud {
     private weather: WeatherSystem,
     private vehicles: VehicleManager,
     private origin: FloatingOrigin,
+    private logs: LogPickups,
   ) {
     this.el = document.createElement('div');
     this.el.id = 'hud';
@@ -45,7 +52,8 @@ export class Hud {
       <div class="panel" id="hud-right"></div>
       <div class="panel" id="hud-time"></div>
       <div id="hud-warning"></div>
-      <div id="hud-prompt"><b>E</b><span></span></div>`;
+      <div id="hud-prompt"><b>E</b><span></span></div>
+      <div id="hud-log"><div class="log-title"></div><div class="log-body"></div></div>`;
     document.body.appendChild(this.el);
     this.tape = this.el.querySelector('.compass-tape')!;
     this.left = this.el.querySelector('#hud-left')!;
@@ -53,6 +61,20 @@ export class Hud {
     this.time = this.el.querySelector('#hud-time')!;
     this.warning = this.el.querySelector('#hud-warning')!;
     this.prompt = this.el.querySelector('#hud-prompt')!;
+    this.logPanel = this.el.querySelector('#hud-log')!;
+    this.logBody = this.el.querySelector('#hud-log .log-body')!;
+
+    // 日志拾取 → 打字机呈现
+    engine.bus.on('log:collected', ({ title, body, already, count, total }) => {
+      const titleEl = this.logPanel.querySelector('.log-title')!;
+      titleEl.innerHTML = `${title}<span class="log-tag">${already ? '已收录 · ' : ''}日志 ${String(count).padStart(2, '0')}/${total}</span>`;
+      this.typeText = body;
+      this.typeShown = 0;
+      this.logHold = 7;
+      this.logPanel.style.display = 'block';
+      this.logPanel.classList.remove('done');
+      this.logPanel.style.opacity = '1';
+    });
 
     // 罗盘刻度带（3 组循环以覆盖平移）
     let tape = '';
@@ -74,6 +96,23 @@ export class Hud {
   }
 
   update(dt: number): void {
+    // 打字机推进
+    if (this.typeText) {
+      this.typeShown = Math.min(this.typeText.length, this.typeShown + dt * 28);
+      this.logBody.textContent = this.typeText.slice(0, Math.floor(this.typeShown));
+      if (this.typeShown >= this.typeText.length) {
+        this.logPanel.classList.add('done');
+        this.logHold -= dt;
+        if (this.logHold <= 0) {
+          this.logPanel.style.opacity = '0';
+          if (this.logHold < -0.7) {
+            this.logPanel.style.display = 'none';
+            this.typeText = '';
+          }
+        }
+      }
+    }
+
     // 罗盘每帧（平滑），面板 10Hz
     const yawDeg = ((-this.getYaw() * 180) / Math.PI + 360 * 4) % 360;
     const px = (yawDeg / 360) * (60 * 8);
@@ -113,12 +152,18 @@ export class Hud {
     this.warning.style.display = warn ? 'block' : 'none';
     if (warn) this.warning.textContent = warn;
 
-    // 交互提示
+    // 交互提示：载具优先，其次数据板
     const nearby = this.vehicles.nearby;
-    this.prompt.style.display = nearby && !riding ? 'block' : 'none';
-    if (nearby) {
+    const pad = this.logs.nearbyPad;
+    if (!riding && nearby) {
+      this.prompt.style.display = 'block';
       this.prompt.querySelector('span')!.textContent =
         nearby.kind === 'rover' ? ' 登上探测车' : ' 登上悬浮飞行器';
+    } else if (!riding && pad) {
+      this.prompt.style.display = 'block';
+      this.prompt.querySelector('span')!.textContent = ' 读取数据板';
+    } else {
+      this.prompt.style.display = 'none';
     }
     void this.origin;
   }

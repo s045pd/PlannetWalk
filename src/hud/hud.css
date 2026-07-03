@@ -153,6 +153,46 @@
   border-radius: 2px;
 }
 
+#hud-log {
+  position: absolute;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, 78vw);
+  padding: 12px 16px;
+  border: 1px solid rgba(159, 232, 255, 0.35);
+  border-left: 3px solid rgba(159, 232, 255, 0.8);
+  background: rgba(3, 12, 18, 0.72);
+  backdrop-filter: blur(3px);
+  display: none;
+  transition: opacity 0.6s;
+}
+#hud-log .log-title {
+  font-size: 13px;
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+  color: #cdf2ff;
+}
+#hud-log .log-tag {
+  float: right;
+  opacity: 0.55;
+  font-size: 11px;
+}
+#hud-log .log-body {
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: rgba(178, 226, 245, 0.92);
+  white-space: pre-wrap;
+  min-height: 3em;
+}
+#hud-log .log-body::after {
+  content: '▍';
+  animation: hud-blink 0.8s steps(2) infinite;
+}
+#hud-log.done .log-body::after {
+  content: '';
+}
+
 /* 开场 */
 #intro {
   position: fixed;
