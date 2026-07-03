@@ -39,6 +39,17 @@ export class DayNight {
     private sky: Sky,
   ) {
     this.sun = new THREE.DirectionalLight(0xffffff, 2.4);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    const sc = this.sun.shadow.camera;
+    sc.left = -70;
+    sc.right = 70;
+    sc.top = 70;
+    sc.bottom = -70;
+    sc.near = 1;
+    sc.far = 1400;
+    this.sun.shadow.bias = -0.0004;
+    this.sun.shadow.normalBias = 2;
     this.hemi = new THREE.HemisphereLight(0xcbd8ee, 0x51443a, 0.8);
     engine.scene.add(this.sun, this.sun.target, this.hemi);
 
@@ -82,6 +93,7 @@ export class DayNight {
     this.sun.intensity = 1.9 * dayness;
     this.sun.position.copy(camPos).addScaledVector(this.sunDir, 600);
     this.sun.target.position.copy(camPos);
+    this.sun.castShadow = el > 0.02; // 日落后关阴影省性能
 
     // 环境光
     this.hemi.intensity = (0.1 + 0.55 * smoothstep(-0.1, 0.3, el)) * this.ambientMul;

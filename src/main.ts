@@ -7,6 +7,8 @@ import { Player } from './player/Player';
 import { citySiteAt, type CitySite } from './world/citySites';
 import { Sky } from './sky/Sky';
 import { DayNight } from './sky/DayNight';
+import { Stars } from './sky/Stars';
+import { DebrisRing } from './sky/DebrisRing';
 
 const SEED = 20260703;
 
@@ -31,6 +33,8 @@ async function init(): Promise<void> {
 
   const sky = new Sky(engine.scene);
   const dayNight = new DayNight(engine, sky);
+  const stars = new Stars(engine.scene, SEED);
+  const debrisRing = new DebrisRing(engine.scene, SEED);
 
   const origin = new FloatingOrigin();
 
@@ -65,7 +69,9 @@ async function init(): Promise<void> {
   engine.add(terrain);
   engine.add(dayNight);
   engine.add({
-    update() {
+    update(dt) {
+      stars.update(engine.camera.position, dayNight.sunElevation);
+      debrisRing.update(engine.camera.position, dayNight.sunElevation, dt);
       origin.check(player.localPosition());
     },
   });
@@ -85,6 +91,11 @@ async function init(): Promise<void> {
   window.__game.setTimeOfDay = (t: number) => {
     dayNight.timeOfDay = ((t % 1) + 1) % 1;
   };
+  window.__game.setView = (yaw: number, pitch: number) => {
+    player.yaw = yaw;
+    player.pitch = pitch;
+  };
+  window.__game.debug = { engine, sky, dayNight, debrisRing };
   window.__game.playerPos = () => {
     const w = player.worldPosition();
     return { x: w.x, y: w.y, z: w.z };
@@ -102,6 +113,8 @@ declare global {
       playerPos?: () => { x: number; y: number; z: number };
       groundHeight?: () => number;
       setTimeOfDay?: (t: number) => void;
+      setView?: (yaw: number, pitch: number) => void;
+      debug?: Record<string, unknown>;
     };
   }
 }

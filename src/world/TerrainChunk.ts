@@ -79,6 +79,7 @@ export function buildChunkMesh(data: ChunkResult, material: THREE.Material): THR
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(size / 2, 0, size / 2), size * 1.5);
   const mesh = new THREE.Mesh(geo, material);
   mesh.receiveShadow = true;
+  mesh.castShadow = data.res >= 32; // 近/中景块参与地形自阴影
   mesh.matrixAutoUpdate = false;
   return mesh;
 }
