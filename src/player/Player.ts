@@ -38,6 +38,8 @@ export class Player {
   jetThrusting = false;
   /** 喷焰粒子池（main 注入） */
   flames: ParticlePool | null = null;
+  /** 鼠标灵敏度倍率（设置菜单） */
+  sensitivity = 1;
   private shockTimer = 0;
 
   constructor(
@@ -178,8 +180,9 @@ export class Player {
   update(dt: number, alpha: number): void {
     if (this.riding || this.engine.cameraLock) return; // 鼠标交给载具/照片模式相机
     const m = this.engine.input.consumeMouse();
-    this.yaw -= m.dx * 0.0022;
-    this.pitch = Math.max(-1.55, Math.min(1.55, this.pitch - m.dy * 0.0022));
+    const sens = 0.0022 * this.sensitivity;
+    this.yaw -= m.dx * sens;
+    this.pitch = Math.max(-1.55, Math.min(1.55, this.pitch - m.dy * sens));
 
     // 头部晃动：行走/奔跑频率不同，落地下沉恢复
     const moving = this.cc.grounded && this.speed > 0.5;

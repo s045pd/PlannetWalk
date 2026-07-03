@@ -24,6 +24,7 @@ import { LogPickups } from './story/LogPickups';
 import { PoiManager } from './world/PoiManager';
 import { AudioSystem } from './audio/AudioSystem';
 import { Settings, createDebugPanel } from './core/Settings';
+import { SettingsMenu } from './hud/SettingsMenu';
 import { loadSave, writeSave, clearSave, SAVE_VERSION } from './core/SaveGame';
 import { WeatherSystem } from './weather/WeatherSystem';
 import { Particles } from './weather/Particles';
@@ -154,6 +155,7 @@ async function init(): Promise<void> {
   const settings = new Settings(engine, dayNight, terrain, particles, postfx);
   const photoMode = new PhotoMode(engine);
   const scanner = new Scanner(engine, player, poiManager, logPickups, origin, terrain.hf);
+  new SettingsMenu(engine, settings, audio, player);
   createDebugPanel(engine);
 
   // 存档恢复与自动写档

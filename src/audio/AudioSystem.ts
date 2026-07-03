@@ -59,7 +59,7 @@ export class AudioSystem {
     helmet.type = 'lowpass';
     helmet.frequency.value = 3500;
     this.master = ctx.createGain();
-    this.master.gain.value = 0.7;
+    this.master.gain.value = this.volume;
     this.master.connect(helmet).connect(ctx.destination);
 
     // 风：循环白噪声 → lowpass
@@ -112,6 +112,14 @@ export class AudioSystem {
     this.breathGain.gain.value = 0;
     brSrc.connect(brFilter).connect(this.breathGain).connect(this.master);
     brSrc.start();
+  }
+
+  private volume = 0.7;
+
+  /** 主音量（设置菜单驱动，0-1） */
+  setVolume(v: number): void {
+    this.volume = v;
+    if (this.master) this.master.gain.value = v;
   }
 
   /** 短噪声 burst（脚步/雷/落地共用） */

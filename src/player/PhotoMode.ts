@@ -50,7 +50,7 @@ export class PhotoMode {
     this.active = false;
     this.engine.cameraLock = null;
     this.engine.timeScale = 1;
-    this.engine.camera.fov = BASE_FOV;
+    this.engine.camera.fov = this.engine.baseFov;
     this.engine.camera.updateProjectionMatrix();
     const hud = document.getElementById('hud');
     if (hud) hud.style.display = 'block';

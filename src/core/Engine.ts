@@ -26,6 +26,8 @@ export class Engine {
   cameraLock: 'photo' | null = null;
   /** 世界时间缩放（照片模式慢动作） */
   timeScale = 1;
+  /** 用户设置的基准 FOV（照片模式退出时恢复） */
+  baseFov = 70;
 
   private systems: System[] = [];
   private acc = 0;
