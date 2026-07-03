@@ -101,13 +101,18 @@ export class Player {
     this.speed = Math.hypot(actual.x, actual.z) / h;
   }
 
+  /** 上/下载具：乘载时禁用胶囊碰撞，实体位置由 VehicleManager 同步 */
+  setRiding(r: boolean): void {
+    this.riding = r;
+    this.cc.collider.setEnabled(!r);
+    if (!r) this.vy = 0;
+  }
+
   update(dt: number, alpha: number): void {
+    if (this.riding) return; // 鼠标交给载具相机
     const m = this.engine.input.consumeMouse();
-    if (!this.riding) {
-      this.yaw -= m.dx * 0.0022;
-      this.pitch = Math.max(-1.55, Math.min(1.55, this.pitch - m.dy * 0.0022));
-    }
-    if (this.riding) return;
+    this.yaw -= m.dx * 0.0022;
+    this.pitch = Math.max(-1.55, Math.min(1.55, this.pitch - m.dy * 0.0022));
 
     // 头部晃动：行走/奔跑频率不同，落地下沉恢复
     const moving = this.cc.grounded && this.speed > 0.5;
