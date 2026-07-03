@@ -17,6 +17,7 @@ import { VehicleManager } from './vehicles/Rideable';
 import { Rover } from './vehicles/Rover';
 import { Hovercraft } from './vehicles/Hovercraft';
 import { Hud } from './hud/Hud';
+import { PhotoMode } from './player/PhotoMode';
 import { LogPickups } from './story/LogPickups';
 import { PoiManager } from './world/PoiManager';
 import { AudioSystem } from './audio/AudioSystem';
@@ -124,6 +125,7 @@ async function init(): Promise<void> {
   );
   const audio = new AudioSystem(engine, player, weather, vehicles, terrain.hf);
   const settings = new Settings(engine, dayNight, terrain, particles, postfx);
+  const photoMode = new PhotoMode(engine);
   createDebugPanel(engine);
 
   engine.add(player);
@@ -141,6 +143,7 @@ async function init(): Promise<void> {
   engine.add(hud);
   engine.add(audio);
   engine.add(settings);
+  engine.add(photoMode);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);

@@ -42,7 +42,9 @@ export class VehicleManager {
   }
 
   fixedUpdate(h: number): void {
-    for (const v of this.vehicles) v.fixedUpdate(this.engine.input, h, v === this.riding);
+    const locked = this.engine.cameraLock !== null;
+    for (const v of this.vehicles)
+      v.fixedUpdate(this.engine.input, h, v === this.riding && !locked);
     if (this.riding) {
       // 玩家实体跟随载具（维持地形流式加载与 floating origin 的焦点）
       const p = this.riding.getPosition(TMP);
@@ -53,6 +55,7 @@ export class VehicleManager {
   update(dt: number): void {
     const input = this.engine.input;
     for (const v of this.vehicles) v.update(dt);
+    if (this.engine.cameraLock) return; // 照片模式接管相机与输入
 
     if (this.riding) {
       const m = input.consumeMouse();

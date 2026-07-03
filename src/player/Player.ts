@@ -67,7 +67,7 @@ export class Player {
   }
 
   fixedUpdate(h: number): void {
-    if (!this.active || this.riding) return;
+    if (!this.active || this.riding || this.engine.cameraLock) return;
     const input = this.engine.input;
     const fwd = new THREE.Vector2(-Math.sin(this.yaw), -Math.cos(this.yaw));
     const right = new THREE.Vector2(-fwd.y, fwd.x);
@@ -132,7 +132,7 @@ export class Player {
   }
 
   update(dt: number, alpha: number): void {
-    if (this.riding) return; // 鼠标交给载具相机
+    if (this.riding || this.engine.cameraLock) return; // 鼠标交给载具/照片模式相机
     const m = this.engine.input.consumeMouse();
     this.yaw -= m.dx * 0.0022;
     this.pitch = Math.max(-1.55, Math.min(1.55, this.pitch - m.dy * 0.0022));
