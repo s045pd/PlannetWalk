@@ -18,6 +18,7 @@ import { Rover } from './vehicles/Rover';
 import { Hovercraft } from './vehicles/Hovercraft';
 import { Hud } from './hud/Hud';
 import { PhotoMode } from './player/PhotoMode';
+import { ParticlePool } from './fx/ParticlePool';
 import { LogPickups } from './story/LogPickups';
 import { PoiManager } from './world/PoiManager';
 import { AudioSystem } from './audio/AudioSystem';
@@ -99,6 +100,28 @@ async function init(): Promise<void> {
   // 地形碰撞就绪前冻结载具，防止坠穿
   rover.body.setGravityScale(0, false);
   hovercraft.body.setGravityScale(0, false);
+
+  // 载具/喷气粒子池
+  const dustPool = new ParticlePool(engine.scene, 700, {
+    gravity: 0.9,
+    grow: 3.2,
+    opacity: 0.4,
+  });
+  const flamePool = new ParticlePool(engine.scene, 260, {
+    additive: true,
+    gravity: 0,
+    grow: 1.4,
+    opacity: 0.9,
+  });
+  rover.dust = dustPool;
+  hovercraft.dust = dustPool;
+  player.flames = flamePool;
+  origin.onShift(() => {
+    dustPool.clear();
+    flamePool.clear();
+  });
+  engine.add(dustPool);
+  engine.add(flamePool);
 
   origin.onShift((_, total) => terrain.shiftOrigin(total));
 
@@ -204,6 +227,7 @@ async function init(): Promise<void> {
     logPickups,
     poiManager,
     hud,
+    origin,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();

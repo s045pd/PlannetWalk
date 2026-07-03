@@ -5,6 +5,13 @@ import { CharacterController, EYE_OFFSET } from '../physics/CharacterController'
 import { GRAVITY } from '../physics/Physics';
 import type { FloatingOrigin } from '../world/FloatingOrigin';
 import { stepJetpack, JETPACK, type JetpackState } from './jetpack';
+import type { ParticlePool } from '../fx/ParticlePool';
+
+const FLAME_COLOR = new THREE.Color(1.0, 0.62, 0.28);
+const FLAME_CORE = new THREE.Color(1.0, 0.9, 0.7);
+
+const FLAME_TMP = new THREE.Vector3();
+const FLAME_VEL = new THREE.Vector3();
 
 const WALK_SPEED = 3.5;
 const RUN_SPEED = 8;
@@ -29,6 +36,8 @@ export class Player {
   speed = 0;
   jetpack: JetpackState = { fuel: 1, sinceUsed: 99 };
   jetThrusting = false;
+  /** 喷焰粒子池（main 注入） */
+  flames: ParticlePool | null = null;
 
   constructor(
     private engine: Engine,
@@ -95,6 +104,26 @@ export class Player {
     if (this.jetThrusting) {
       this.vy += JETPACK.accel * h;
       this.horizVel.lerp(target, Math.min(1, 0.4 * 10 * h)); // 喷射时增强空中操控
+      // 喷焰：背包下方喷出
+      if (this.flames) {
+        for (let k = 0; k < 2; k++) {
+          FLAME_TMP.set(
+            this.currPos.x + (Math.random() - 0.5) * 0.3,
+            this.currPos.y - 0.7,
+            this.currPos.z + (Math.random() - 0.5) * 0.3,
+          );
+          FLAME_VEL.set(
+            -this.horizVel.x * 0.4 + (Math.random() - 0.5) * 1.5,
+            -6 - Math.random() * 3,
+            -this.horizVel.y * 0.4 + (Math.random() - 0.5) * 1.5,
+          );
+          this.flames.spawn(FLAME_TMP, FLAME_VEL, {
+            size: 0.12 + Math.random() * 0.1,
+            life: 0.2 + Math.random() * 0.15,
+            color: Math.random() < 0.35 ? FLAME_CORE : FLAME_COLOR,
+          });
+        }
+      }
     }
 
     if (this.cc.grounded) {

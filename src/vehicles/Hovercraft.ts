@@ -7,6 +7,9 @@ import type { Terrain } from '../world/Terrain';
 import type { FloatingOrigin } from '../world/FloatingOrigin';
 import { createPid, type Pid } from './pid';
 import type { Rideable, VehicleHud } from './Rideable';
+import type { ParticlePool } from '../fx/ParticlePool';
+
+const PAD_DUST = new THREE.Color(0.6, 0.5, 0.38);
 
 const HOVER_TARGET = 3;
 const MAX_ALT = 12;
@@ -29,6 +32,9 @@ export class Hovercraft implements Rideable {
   private lookPitch = 0;
   altitude = 0;
   thrustLevel = 0;
+  /** 气垫尘环粒子池（main 注入） */
+  dust: ParticlePool | null = null;
+  private dustTimer = 0;
 
   constructor(
     engine: Engine,
@@ -168,7 +174,25 @@ export class Hovercraft implements Rideable {
     // 推进辉光脉动
     const s = 0.8 + this.thrustLevel * 0.5 + Math.sin(performance.now() * 0.02) * 0.08;
     for (const g of this.glows) g.scale.setScalar(s);
-    void dt;
+
+    // 低空气垫尘环
+    if (this.dust && this.altitude < 4.5) {
+      this.dustTimer -= dt;
+      const vel = this.body.linvel();
+      const speed = Math.hypot(vel.x, vel.z);
+      const interval = 0.12 / (1 + speed * 0.15);
+      if (this.dustTimer <= 0) {
+        this.dustTimer = interval;
+        const ang = Math.random() * Math.PI * 2;
+        TMP_V.set(t.x + Math.cos(ang) * 2.2, t.y - this.altitude + 0.4, t.z + Math.sin(ang) * 2.2);
+        TMP_V2.set(Math.cos(ang) * 3.2, 0.8, Math.sin(ang) * 3.2);
+        this.dust.spawn(TMP_V, TMP_V2, {
+          size: 0.5 + Math.random() * 0.4,
+          life: 0.7 + Math.random() * 0.4,
+          color: PAD_DUST,
+        });
+      }
+    }
   }
 
   applyCamera(camera: THREE.PerspectiveCamera, dx: number, dy: number): void {
@@ -196,3 +220,5 @@ export class Hovercraft implements Rideable {
 }
 
 const TMP_Q = new THREE.Quaternion();
+const TMP_V = new THREE.Vector3();
+const TMP_V2 = new THREE.Vector3();
