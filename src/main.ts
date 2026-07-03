@@ -10,6 +10,8 @@ import { DayNight } from './sky/DayNight';
 import { Stars } from './sky/Stars';
 import { DebrisRing } from './sky/DebrisRing';
 import { PostFX } from './fx/PostFX';
+import { Ruins } from './world/Ruins';
+import { Scatter } from './world/Scatter';
 import { WeatherSystem } from './weather/WeatherSystem';
 import { Particles } from './weather/Particles';
 import { Lightning } from './weather/Lightning';
@@ -64,6 +66,8 @@ async function init(): Promise<void> {
   spawnWorld.y = terrain.heightAt(spawnWorld.x, spawnWorld.z) + 1.6;
 
   const physics = await Physics.create(terrain, origin, worldFocus);
+  const ruins = new Ruins(engine.scene, SEED, terrain.hf, origin, physics, worldFocus);
+  const scatter = new Scatter(engine.scene, SEED, terrain.hf, origin, worldFocus);
   const weather = new WeatherSystem(engine, dayNight, sky, terrain);
   const particles = new Particles(engine, weather, SEED);
   const lightning = new Lightning(engine, sky, weather);
@@ -76,6 +80,8 @@ async function init(): Promise<void> {
   engine.add(player);
   engine.add(physics);
   engine.add(terrain);
+  engine.add(ruins);
+  engine.add(scatter);
   engine.add(dayNight);
   engine.add(weather);
   engine.add(particles);
@@ -110,7 +116,16 @@ async function init(): Promise<void> {
   window.__game.setWeather = (name: string, duration = 3) => {
     weather.setWeather(name as WeatherName, duration);
   };
-  window.__game.debug = { engine, sky, dayNight, debrisRing, postfx };
+  window.__game.teleport = (x: number, z: number) => {
+    const y = terrain.heightAt(x, z) + 1.5;
+    player.teleportLocal(
+      new THREE.Vector3(x - origin.totalOffset.x, y, z - origin.totalOffset.z),
+    );
+  };
+  window.__game.teleportToCity = () => {
+    window.__game.teleport!(city.x, city.z);
+  };
+  window.__game.debug = { engine, sky, dayNight, debrisRing, postfx, physics, ruins, weather };
   window.__game.playerPos = () => {
     const w = player.worldPosition();
     return { x: w.x, y: w.y, z: w.z };
@@ -130,6 +145,8 @@ declare global {
       setTimeOfDay?: (t: number) => void;
       setView?: (yaw: number, pitch: number) => void;
       setWeather?: (name: string, duration?: number) => void;
+      teleport?: (x: number, z: number) => void;
+      teleportToCity?: () => void;
       debug?: Record<string, unknown>;
     };
   }
