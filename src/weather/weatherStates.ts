@@ -7,7 +7,8 @@ export type WeatherName =
   | 'ACID_RAIN'
   | 'THUNDERSTORM'
   | 'ASHFALL'
-  | 'FOG';
+  | 'FOG'
+  | 'AURORA';
 
 export interface WeatherParams {
   /** 雾密度 → 映射到 Fog near/far */
@@ -43,7 +44,7 @@ export const WEATHER_STATES: Record<WeatherName, WeatherState> = {
     ambientMul: 1,
     wetness: 0,
     dwell: [90, 200],
-    transitions: { HAZE: 4, ASHFALL: 2, FOG: 1.5, ACID_RAIN: 1.5, CLEAR: 2 },
+    transitions: { HAZE: 4, ASHFALL: 2, FOG: 1.5, ACID_RAIN: 1.5, CLEAR: 2, AURORA: 1 },
   },
   HAZE: {
     fogDensity: 0.35,
@@ -121,6 +122,20 @@ export const WEATHER_STATES: Record<WeatherName, WeatherState> = {
     ambientMul: 0.85,
     wetness: 0.3,
     dwell: [50, 120],
-    transitions: { CLEAR: 3, HAZE: 1.5, ACID_RAIN: 1 },
+    transitions: { CLEAR: 3, HAZE: 1.5, ACID_RAIN: 1, AURORA: 0.8 },
+  },
+  /** 极光：大气电离辉光。参数近似 CLEAR，帘幕仅在夜间可见 */
+  AURORA: {
+    fogDensity: 0.1,
+    tint: [0.92, 1, 0.98],
+    windSpeed: 1.5,
+    rainRate: 0,
+    dustRate: 0,
+    ashRate: 0,
+    exposureMul: 1,
+    ambientMul: 1.05,
+    wetness: 0,
+    dwell: [70, 150],
+    transitions: { CLEAR: 3, FOG: 1 },
   },
 };

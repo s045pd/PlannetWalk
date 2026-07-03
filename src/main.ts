@@ -5,10 +5,12 @@ import { FloatingOrigin } from './world/FloatingOrigin';
 import { Physics } from './physics/Physics';
 import { Player } from './player/Player';
 import { citySiteAt, type CitySite } from './world/citySites';
+import { smoothstep } from './world/noise';
 import { Sky } from './sky/Sky';
 import { DayNight } from './sky/DayNight';
 import { Stars } from './sky/Stars';
 import { DebrisRing } from './sky/DebrisRing';
+import { Aurora } from './sky/Aurora';
 import { PostFX } from './fx/PostFX';
 import { Ruins } from './world/Ruins';
 import { Scatter } from './world/Scatter';
@@ -16,8 +18,15 @@ import { VehicleManager } from './vehicles/Rideable';
 import { Rover } from './vehicles/Rover';
 import { Hovercraft } from './vehicles/Hovercraft';
 import { Hud } from './hud/Hud';
+import { PhotoMode } from './player/PhotoMode';
+import { Scanner } from './player/Scanner';
+import { ParticlePool } from './fx/ParticlePool';
+import { LogPickups } from './story/LogPickups';
+import { PoiManager } from './world/PoiManager';
 import { AudioSystem } from './audio/AudioSystem';
 import { Settings, createDebugPanel } from './core/Settings';
+import { SettingsMenu } from './hud/SettingsMenu';
+import { loadSave, writeSave, clearSave, SAVE_VERSION } from './core/SaveGame';
 import { WeatherSystem } from './weather/WeatherSystem';
 import { Particles } from './weather/Particles';
 import { Lightning } from './weather/Lightning';
@@ -52,7 +61,8 @@ async function init(): Promise<void> {
 
   const origin = new FloatingOrigin();
 
-  // 出生点：最近城市边缘外 80m，面向城市
+  // 出生点：最近城市边缘外 80m，面向城市；有存档则回到存档位置
+  const save = loadSave();
   const city = findSpawnCity(SEED);
   const spawnDir = Math.PI * 0.25;
   const spawnWorld = new THREE.Vector3(
@@ -60,6 +70,7 @@ async function init(): Promise<void> {
     0,
     city.z + Math.sin(spawnDir) * (city.radius + 80),
   );
+  if (save) spawnWorld.set(save.playerWorld.x, save.playerWorld.y, save.playerWorld.z);
 
   let playerRef: Player | null = null;
   const worldFocus = (): { x: number; z: number } => {
@@ -69,15 +80,16 @@ async function init(): Promise<void> {
   };
 
   const terrain = new Terrain(engine.scene, SEED, worldFocus);
-  spawnWorld.y = terrain.heightAt(spawnWorld.x, spawnWorld.z) + 1.6;
+  if (!save) spawnWorld.y = terrain.heightAt(spawnWorld.x, spawnWorld.z) + 1.6;
 
   const physics = await Physics.create(terrain, origin, worldFocus);
   const ruins = new Ruins(engine.scene, SEED, terrain.hf, origin, physics, worldFocus);
   const scatter = new Scatter(engine.scene, SEED, terrain.hf, origin, worldFocus);
   const weather = new WeatherSystem(engine, dayNight, sky, terrain);
   const particles = new Particles(engine, weather, SEED);
-  const lightning = new Lightning(engine, sky, weather);
   const player = new Player(engine, physics, origin, spawnWorld.clone());
+  const lightning = new Lightning(engine, sky, weather, player, terrain);
+  const aurora = new Aurora(engine, weather, dayNight);
   player.yaw = Math.atan2(spawnWorld.x - city.x, spawnWorld.z - city.z);
   playerRef = player;
 
@@ -96,12 +108,82 @@ async function init(): Promise<void> {
   rover.body.setGravityScale(0, false);
   hovercraft.body.setGravityScale(0, false);
 
+  // 载具/喷气粒子池
+  const dustPool = new ParticlePool(engine.scene, 700, {
+    gravity: 0.9,
+    grow: 3.2,
+    opacity: 0.4,
+  });
+  const flamePool = new ParticlePool(engine.scene, 260, {
+    additive: true,
+    gravity: 0,
+    grow: 1.4,
+    opacity: 0.9,
+  });
+  rover.dust = dustPool;
+  hovercraft.dust = dustPool;
+  player.flames = flamePool;
+  origin.onShift(() => {
+    dustPool.clear();
+    flamePool.clear();
+  });
+  engine.add(dustPool);
+  engine.add(flamePool);
+
   origin.onShift((_, total) => terrain.shiftOrigin(total));
 
-  const hud = new Hud(engine, player, dayNight, terrain, weather, vehicles, origin);
+  const logPickups = new LogPickups(engine, SEED, terrain.hf, origin, player);
+  const poiManager = new PoiManager(
+    engine.scene,
+    SEED,
+    terrain.hf,
+    origin,
+    physics,
+    logPickups,
+    worldFocus,
+  );
+  const hud = new Hud(
+    engine,
+    player,
+    dayNight,
+    terrain,
+    weather,
+    vehicles,
+    origin,
+    logPickups,
+    poiManager,
+  );
   const audio = new AudioSystem(engine, player, weather, vehicles, terrain.hf);
   const settings = new Settings(engine, dayNight, terrain, particles, postfx);
+  const photoMode = new PhotoMode(engine);
+  const scanner = new Scanner(engine, player, poiManager, logPickups, origin, terrain.hf);
+  new SettingsMenu(engine, settings, audio, player);
   createDebugPanel(engine);
+
+  // 存档恢复与自动写档
+  if (save) {
+    dayNight.timeOfDay = save.timeOfDay;
+    weather.setWeather(save.weather as WeatherName, 0.5);
+    logPickups.restore(save.collectedLogs, save.usedSpotKeys);
+    settings.apply(save.quality);
+  }
+  const doSave = (): void => {
+    if (!window.__game.ready) return;
+    const w = player.worldPosition();
+    writeSave({
+      version: SAVE_VERSION,
+      playerWorld: { x: w.x, y: w.y, z: w.z },
+      timeOfDay: dayNight.timeOfDay,
+      weather: weather.core.current,
+      collectedLogs: [...logPickups.collected],
+      usedSpotKeys: [...logPickups.usedSpotKeys],
+      quality: settings.tier,
+    });
+  };
+  setInterval(doSave, 10000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) doSave();
+  });
 
   engine.add(player);
   engine.add(vehicles);
@@ -113,13 +195,19 @@ async function init(): Promise<void> {
   engine.add(weather);
   engine.add(particles);
   engine.add(lightning);
+  engine.add(aurora);
+  engine.add(logPickups);
+  engine.add(poiManager);
   engine.add(hud);
   engine.add(audio);
   engine.add(settings);
+  engine.add(photoMode);
+  engine.add(scanner);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
       debrisRing.update(engine.camera.position, dayNight.sunElevation, dt);
+      ruins.setNightFactor(smoothstep(0.05, -0.12, dayNight.sunElevation));
       origin.check(player.localPosition());
     },
   });
@@ -159,6 +247,8 @@ async function init(): Promise<void> {
   };
   window.__game.getFps = () => engine.fps;
   window.__game.setQuality = (t: 'low' | 'medium' | 'high') => settings.apply(t);
+  window.__game.saveNow = doSave;
+  window.__game.resetSave = clearSave;
   window.__game.debug = {
     engine,
     sky,
@@ -172,6 +262,12 @@ async function init(): Promise<void> {
     rover,
     hovercraft,
     player,
+    logPickups,
+    poiManager,
+    hud,
+    origin,
+    lightning,
+    scanner,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();
@@ -196,6 +292,8 @@ declare global {
       teleportToCity?: () => void;
       getFps?: () => number;
       setQuality?: (t: 'low' | 'medium' | 'high') => void;
+      saveNow?: () => void;
+      resetSave?: () => void;
       debug?: Record<string, unknown>;
     };
   }

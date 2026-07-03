@@ -22,6 +22,12 @@ export class Engine {
 
   /** 覆盖默认渲染（后处理接管时设置） */
   renderOverride: ((dt: number) => void) | null = null;
+  /** 相机被特殊模式接管（如照片模式）：玩家/载具跳过输入与相机写入 */
+  cameraLock: 'photo' | null = null;
+  /** 世界时间缩放（照片模式慢动作） */
+  timeScale = 1;
+  /** 用户设置的基准 FOV（照片模式退出时恢复） */
+  baseFov = 70;
 
   private systems: System[] = [];
   private acc = 0;
@@ -76,7 +82,9 @@ export class Engine {
   }
 
   private frame(): void {
-    const dt = Math.min(this.clock.getDelta(), 0.1);
+    this.input.pollGamepad();
+    const rawDt = Math.min(this.clock.getDelta(), 0.1);
+    const dt = rawDt * this.timeScale;
     const { steps, acc, alpha } = advanceFixed(this.acc, dt, FIXED_H);
     this.acc = acc;
     for (let i = 0; i < steps; i++) {

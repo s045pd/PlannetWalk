@@ -18,7 +18,19 @@ function hashCell(seed: number, cx: number, cz: number): number {
   return (h ^ (h >>> 16)) >>> 0;
 }
 
+/** cell 级缓存：高度场每顶点查询，确定性结果直接记住 */
+const cityCache = new Map<string, CitySite | null>();
+
 export function citySiteAt(seed: number, cellX: number, cellZ: number): CitySite | null {
+  const key = `${seed}:${cellX}:${cellZ}`;
+  const hit = cityCache.get(key);
+  if (hit !== undefined) return hit;
+  const site = computeCitySite(seed, cellX, cellZ);
+  cityCache.set(key, site);
+  return site;
+}
+
+function computeCitySite(seed: number, cellX: number, cellZ: number): CitySite | null {
   const rng = mulberry32(hashCell(seed, cellX, cellZ));
   if (rng() > 0.35) return null;
   const radius = 250 + rng() * 250;

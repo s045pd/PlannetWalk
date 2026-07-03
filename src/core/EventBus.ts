@@ -8,6 +8,15 @@ export interface Events {
   'player:landed': { speed: number };
   'player:step': { biome: number };
   'weather:lightning': { delaySec: number };
+  'player:shocked': { intensity: number };
+  'log:collected': {
+    id: string;
+    title: string;
+    body: string;
+    already: boolean;
+    total: number;
+    count: number;
+  };
 }
 
 type Handler<K extends keyof Events> = (payload: Events[K]) => void;

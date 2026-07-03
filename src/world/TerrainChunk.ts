@@ -58,6 +58,27 @@ export function createTerrainMaterial(): THREE.MeshStandardMaterial {
          }`,
       )
       .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+         {
+           // 程序细节法线：双尺度噪声梯度扰动，随距离淡出防远处闪烁
+           vec2 tw = vWP.xz + uOriginOff;
+           float fade = 1.0 - smoothstep(30.0, 90.0, length(vViewPosition));
+           if (fade > 0.01) {
+             float e = 0.35;
+             float s1 = 1.1;
+             float h0 = pwNoise(tw * s1) + pwNoise(tw * 4.3) * 0.4;
+             float hx = pwNoise((tw + vec2(e, 0.0)) * s1) + pwNoise((tw + vec2(e, 0.0)) * 4.3) * 0.4;
+             float hz = pwNoise((tw + vec2(0.0, e)) * s1) + pwNoise((tw + vec2(0.0, e)) * 4.3) * 0.4;
+             vec3 grad = vec3(-(hx - h0) / e, 1.0, -(hz - h0) / e);
+             // vWP 空间的扰动近似映射到视空间法线
+             vec3 wn = normalize(vec3(grad.x, grad.y * 1.6, grad.z));
+             vec3 vn = normalize((viewMatrix * vec4(wn, 0.0)).xyz);
+             normal = normalize(mix(normal, vn, 0.26 * fade));
+           }
+         }`,
+      )
+      .replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
          roughnessFactor = clamp(roughnessFactor - vGlass * 0.55 - uWetness * 0.35, 0.05, 1.0);`,

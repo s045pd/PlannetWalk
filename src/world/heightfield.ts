@@ -1,5 +1,6 @@
 import { createNoise2D, fbm2, ridged2, smoothstep, lerp } from './noise';
 import { nearestCity } from './citySites';
+import { nearestPoi, craterDepth, PoiKind } from './poi';
 
 /** 生物群系：尘漠 / 碎岩原 / 玻璃化熔壳 / 灰烬平原 */
 export enum Biome {
@@ -37,14 +38,28 @@ export function createHeightfield(seed: number): Heightfield {
   }
 
   function height(x: number, z: number): number {
-    const h = rawHeight(x, z);
+    let h = rawHeight(x, z);
     const city = nearestCity(seed, x, z);
-    if (!city) return h;
-    const d = Math.hypot(x - city.x, z - city.z);
-    if (d >= city.radius) return h;
-    const plateau = rawHeight(city.x, city.z);
-    const t = smoothstep(city.radius, city.radius * 0.6, d); // 中心 t=1
-    return lerp(h, plateau, t);
+    if (city) {
+      const d = Math.hypot(x - city.x, z - city.z);
+      if (d < city.radius) {
+        const plateau = rawHeight(city.x, city.z);
+        const t = smoothstep(city.radius, city.radius * 0.6, d); // 中心 t=1
+        h = lerp(h, plateau, t);
+      }
+    }
+    // POI 影响：陨坑下凹 / 残骸与信标塔小台地
+    const poi = nearestPoi(seed, x, z, 1);
+    if (poi) {
+      const d = Math.hypot(x - poi.x, z - poi.z);
+      if (poi.kind === PoiKind.CRATER) {
+        h += craterDepth(d, poi.radius);
+      } else if (d < poi.radius) {
+        const pad = rawHeight(poi.x, poi.z);
+        h = lerp(h, pad, smoothstep(poi.radius, poi.radius * 0.45, d));
+      }
+    }
+    return h;
   }
 
   /** 双通道低频噪声划分四象限；GLASS 只出现在平缓区（mMask 低） */

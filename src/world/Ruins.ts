@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { citySiteAt, CITY_CELL, type CitySite } from './citySites';
-import { buildRuinedTower } from './Building';
+import { buildRuinedTower, type BoxDef } from './Building';
 import { mulberry32 } from './noise';
 import type { Heightfield } from './heightfield';
 import type { FloatingOrigin } from './FloatingOrigin';
@@ -17,6 +17,7 @@ interface BuildingRec {
   y: number;
   rotY: number;
   half: { x: number; y: number; z: number };
+  colliders: BoxDef[];
   body: RAPIER.RigidBody | null;
 }
 
@@ -25,7 +26,32 @@ interface CityRec {
   props: THREE.InstancedMesh[];
   buildings: BuildingRec[];
   site: CitySite;
+  windows: THREE.InstancedMesh | null;
 }
+
+/** 幸存应急灯窗口 shader：按实例哈希闪烁，夜间因子控制显隐 */
+const WINDOW_VERT = /* glsl */ `
+attribute float aPhase;
+varying float vPhase;
+void main() {
+  vPhase = aPhase;
+  gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+}
+`;
+const WINDOW_FRAG = /* glsl */ `
+uniform float uTime;
+uniform float uNight;
+varying float vPhase;
+void main() {
+  // 每窗独立的缓慢明灭 + 偶发闪断
+  float slow = 0.55 + 0.45 * sin(uTime * (0.4 + vPhase * 0.7) + vPhase * 40.0);
+  float flick = step(0.06, fract(uTime * (0.13 + vPhase * 0.2) + vPhase * 7.0));
+  float on = slow * flick * uNight;
+  if (on < 0.02) discard;
+  vec3 warm = mix(vec3(1.0, 0.75, 0.4), vec3(0.65, 0.9, 1.0), step(0.8, vPhase));
+  gl_FragColor = vec4(warm * on * 3.4, 1.0);
+}
+`;
 
 function hashKey(cx: number, cz: number): string {
   return `${cx},${cz}`;
@@ -37,7 +63,9 @@ export class Ruins {
   private cities = new Map<string, CityRec>();
   private mat: THREE.MeshStandardMaterial;
   private propGeos: { geo: THREE.BufferGeometry; color: THREE.Color }[];
+  private windowMat: THREE.ShaderMaterial;
   private checkTimer = 0;
+  private time = 0;
 
   constructor(
     scene: THREE.Scene,
@@ -69,10 +97,23 @@ export class Ruins {
       { geo: car, color: new THREE.Color(0.32, 0.33, 0.35) },
       { geo: post, color: new THREE.Color(0.35, 0.36, 0.38) },
     ];
+    this.windowMat = new THREE.ShaderMaterial({
+      vertexShader: WINDOW_VERT,
+      fragmentShader: WINDOW_FRAG,
+      uniforms: { uTime: { value: 0 }, uNight: { value: 0 } },
+      side: THREE.DoubleSide,
+    });
     origin.onShift(() => this.repositionAll());
   }
 
+  /** 夜间因子（DayNight 驱动）：0 白天 → 1 深夜 */
+  setNightFactor(f: number): void {
+    this.windowMat.uniforms.uNight.value = f;
+  }
+
   update(dt: number): void {
+    this.time += dt;
+    this.windowMat.uniforms.uTime.value = this.time;
     this.checkTimer -= dt;
     if (this.checkTimer > 0) return;
     this.checkTimer = 1;
@@ -125,12 +166,12 @@ export class Ruins {
         const bx = site.x + px + jx;
         const bz = site.z + pz + jz;
         const by = this.hf.height(bx, bz);
-        const { geometry, halfExtents } = buildRuinedTower(rng, 14 + rng() * 10);
+        const { geometry, halfExtents, colliders } = buildRuinedTower(rng, 14 + rng() * 10);
         const rotY = site.rot + (rng() - 0.5) * 0.12;
         geometry.rotateY(rotY);
         geometry.translate(bx - site.x, by - baseY, bz - site.z);
         geos.push(geometry);
-        buildings.push({ x: bx, z: bz, y: by, rotY, half: halfExtents, body: null });
+        buildings.push({ x: bx, z: bz, y: by, rotY, half: halfExtents, colliders, body: null });
         // 楼旁街道散布物
         if (rng() < 0.6)
           propSpots.push({
@@ -179,7 +220,48 @@ export class Ruins {
       mesh.add(im);
     }
 
-    const rec: CityRec = { mesh, props, buildings, site };
+    // 幸存应急灯窗口：少数楼宇残留的微光（夜间可见）
+    const winSpots: { m: THREE.Matrix4; phase: number }[] = [];
+    const wq = new THREE.Quaternion();
+    for (const b of buildings) {
+      if (rng() > 0.55 || winSpots.length >= 44) continue;
+      const n = 1 + Math.floor(rng() * 3);
+      for (let k = 0; k < n; k++) {
+        const side = Math.floor(rng() * 4);
+        const ang = b.rotY + (side * Math.PI) / 2;
+        const off = (side % 2 === 0 ? b.half.z : b.half.x) + 0.12;
+        const along = (rng() - 0.5) * (side % 2 === 0 ? b.half.x : b.half.z) * 1.4;
+        const wy = 2.5 + rng() * (b.half.y * 2 * 0.7);
+        const wx = b.x - site.x + Math.sin(ang) * off + Math.cos(ang) * along;
+        const wz = b.z - site.z + Math.cos(ang) * off - Math.sin(ang) * along;
+        wq.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ang);
+        const m = new THREE.Matrix4().compose(
+          new THREE.Vector3(wx, b.y - baseY + wy, wz),
+          wq,
+          new THREE.Vector3(1, 1, 1),
+        );
+        winSpots.push({ m, phase: rng() });
+      }
+    }
+    let windows: THREE.InstancedMesh | null = null;
+    if (winSpots.length > 0) {
+      windows = new THREE.InstancedMesh(
+        new THREE.PlaneGeometry(1.5, 1.1),
+        this.windowMat,
+        winSpots.length,
+      );
+      const phases = new Float32Array(winSpots.length);
+      winSpots.forEach((s, i) => {
+        windows!.setMatrixAt(i, s.m);
+        phases[i] = s.phase;
+      });
+      windows.geometry.setAttribute('aPhase', new THREE.InstancedBufferAttribute(phases, 1));
+      windows.instanceMatrix.needsUpdate = true;
+      windows.frustumCulled = false;
+      mesh.add(windows);
+    }
+
+    const rec: CityRec = { mesh, props, buildings, site, windows };
     this.cities.set(key, rec);
     this.placeCity(rec);
     this.group.add(mesh);
@@ -219,21 +301,24 @@ export class Ruins {
       for (const b of rec.buildings) {
         const dist = Math.hypot(b.x - f.x, b.z - f.z);
         if (dist < COLLIDER_RANGE && !b.body) {
+          // 单刚体多碰撞盒：盒位置为楼宇局部坐标，刚体承载整体旋转
           const body = this.physics.world.createRigidBody(
             RAPIER.RigidBodyDesc.fixed()
               .setTranslation(
                 b.x - this.origin.totalOffset.x,
-                b.y + b.half.y,
+                b.y,
                 b.z - this.origin.totalOffset.z,
               )
               .setRotation(
                 new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), b.rotY),
               ),
           );
-          this.physics.world.createCollider(
-            RAPIER.ColliderDesc.cuboid(b.half.x, b.half.y, b.half.z),
-            body,
-          );
+          for (const c of b.colliders) {
+            this.physics.world.createCollider(
+              RAPIER.ColliderDesc.cuboid(c.hx, c.hy, c.hz).setTranslation(c.x, c.y, c.z),
+              body,
+            );
+          }
           b.body = body;
         } else if (dist >= COLLIDER_RANGE + 60 && b.body) {
           this.physics.world.removeRigidBody(b.body);

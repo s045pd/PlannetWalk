@@ -7,6 +7,9 @@ import type { Terrain } from '../world/Terrain';
 import type { WeatherSystem } from '../weather/WeatherSystem';
 import type { VehicleManager } from '../vehicles/Rideable';
 import type { FloatingOrigin } from '../world/FloatingOrigin';
+import type { LogPickups } from '../story/LogPickups';
+import type { PoiManager } from '../world/PoiManager';
+import { PoiKind } from '../world/poi';
 
 const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const TMP_EULER = new THREE.Euler();
@@ -25,7 +28,16 @@ export class Hud {
   private time: HTMLElement;
   private warning: HTMLElement;
   private prompt: HTMLElement;
+  private logPanel: HTMLElement;
+  private logBody: HTMLElement;
+  private poiMarker: HTMLElement;
+  private poiDist: HTMLElement;
+  /** 天气玩法：沙尘暴中罗盘失灵（C2 接线） */
+  compassScramble = 0;
   private updateTimer = 0;
+  private typeText = '';
+  private typeShown = 0;
+  private logHold = 0;
 
   constructor(
     private engine: Engine,
@@ -35,17 +47,21 @@ export class Hud {
     private weather: WeatherSystem,
     private vehicles: VehicleManager,
     private origin: FloatingOrigin,
+    private logs: LogPickups,
+    private poi: PoiManager,
   ) {
     this.el = document.createElement('div');
     this.el.id = 'hud';
     this.el.innerHTML = `
       <div class="crosshair"></div>
-      <div class="compass"><div class="compass-tape"></div></div>
+      <div class="compass"><div class="compass-tape"></div><div class="poi-marker">◆</div></div>
+      <div class="poi-dist"></div>
       <div class="panel" id="hud-left"></div>
       <div class="panel" id="hud-right"></div>
       <div class="panel" id="hud-time"></div>
       <div id="hud-warning"></div>
-      <div id="hud-prompt"><b>E</b><span></span></div>`;
+      <div id="hud-prompt"><b>E</b><span></span></div>
+      <div id="hud-log"><div class="log-title"></div><div class="log-body"></div></div>`;
     document.body.appendChild(this.el);
     this.tape = this.el.querySelector('.compass-tape')!;
     this.left = this.el.querySelector('#hud-left')!;
@@ -53,6 +69,22 @@ export class Hud {
     this.time = this.el.querySelector('#hud-time')!;
     this.warning = this.el.querySelector('#hud-warning')!;
     this.prompt = this.el.querySelector('#hud-prompt')!;
+    this.logPanel = this.el.querySelector('#hud-log')!;
+    this.logBody = this.el.querySelector('#hud-log .log-body')!;
+    this.poiMarker = this.el.querySelector('.poi-marker')!;
+    this.poiDist = this.el.querySelector('.poi-dist')!;
+
+    // 日志拾取 → 打字机呈现
+    engine.bus.on('log:collected', ({ title, body, already, count, total }) => {
+      const titleEl = this.logPanel.querySelector('.log-title')!;
+      titleEl.innerHTML = `${title}<span class="log-tag">${already ? '已收录 · ' : ''}日志 ${String(count).padStart(2, '0')}/${total}</span>`;
+      this.typeText = body;
+      this.typeShown = 0;
+      this.logHold = 7;
+      this.logPanel.style.display = 'block';
+      this.logPanel.classList.remove('done');
+      this.logPanel.style.opacity = '1';
+    });
 
     // 罗盘刻度带（3 组循环以覆盖平移）
     let tape = '';
@@ -74,10 +106,61 @@ export class Hud {
   }
 
   update(dt: number): void {
-    // 罗盘每帧（平滑），面板 10Hz
-    const yawDeg = ((-this.getYaw() * 180) / Math.PI + 360 * 4) % 360;
+    // 沙尘暴罗盘失灵因子
+    this.compassScramble = Math.max(0, Math.min(1, (this.weather.params.dustRate - 0.6) / 0.3));
+
+    // 打字机推进
+    if (this.typeText) {
+      this.typeShown = Math.min(this.typeText.length, this.typeShown + dt * 28);
+      this.logBody.textContent = this.typeText.slice(0, Math.floor(this.typeShown));
+      if (this.typeShown >= this.typeText.length) {
+        this.logPanel.classList.add('done');
+        this.logHold -= dt;
+        if (this.logHold <= 0) {
+          this.logPanel.style.opacity = '0';
+          if (this.logHold < -0.7) {
+            this.logPanel.style.display = 'none';
+            this.typeText = '';
+          }
+        }
+      }
+    }
+
+    // 罗盘每帧（平滑），面板 10Hz；沙尘暴中乱跳
+    const yaw = this.getYaw();
+    const scramble =
+      this.compassScramble > 0
+        ? (Math.sin(performance.now() * 0.013) + Math.sin(performance.now() * 0.037)) *
+          0.7 *
+          this.compassScramble
+        : 0;
+    const yawDeg = ((-(yaw + scramble) * 180) / Math.PI + 360 * 4) % 360;
     const px = (yawDeg / 360) * (60 * 8);
     this.tape.style.transform = `translateX(${160 - 60 * 8 - px + 30}px)`;
+    this.tape.style.opacity = this.compassScramble > 0.5 ? '0.4' : '1';
+
+    // POI 信标：罗盘上的菱形标记 + 距离
+    const w = this.player.worldPosition();
+    const near = this.poi.nearestFrom(w.x, w.z);
+    if (near && this.compassScramble < 0.5) {
+      let delta = near.bearing - yaw;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      const deltaDeg = (delta * 180) / Math.PI;
+      if (Math.abs(deltaDeg) < 110) {
+        this.poiMarker.style.display = 'block';
+        this.poiMarker.style.left = `${160 - deltaDeg * (60 / 45) - 6}px`;
+      } else {
+        this.poiMarker.style.display = 'none';
+      }
+      const kindName =
+        near.site.kind === PoiKind.WRECK ? '残骸' : near.site.kind === PoiKind.TOWER ? '信标塔' : '坠落点';
+      this.poiDist.textContent = `◆ ${kindName} ${near.dist >= 1000 ? (near.dist / 1000).toFixed(2) + ' km' : Math.round(near.dist) + ' m'}`;
+      this.poiDist.style.display = 'block';
+    } else {
+      this.poiMarker.style.display = 'none';
+      this.poiDist.style.display = 'none';
+    }
 
     this.updateTimer -= dt;
     if (this.updateTimer > 0) return;
@@ -113,12 +196,18 @@ export class Hud {
     this.warning.style.display = warn ? 'block' : 'none';
     if (warn) this.warning.textContent = warn;
 
-    // 交互提示
+    // 交互提示：载具优先，其次数据板
     const nearby = this.vehicles.nearby;
-    this.prompt.style.display = nearby && !riding ? 'block' : 'none';
-    if (nearby) {
+    const pad = this.logs.nearbyPad;
+    if (!riding && nearby) {
+      this.prompt.style.display = 'block';
       this.prompt.querySelector('span')!.textContent =
         nearby.kind === 'rover' ? ' 登上探测车' : ' 登上悬浮飞行器';
+    } else if (!riding && pad) {
+      this.prompt.style.display = 'block';
+      this.prompt.querySelector('span')!.textContent = ' 读取数据板';
+    } else {
+      this.prompt.style.display = 'none';
     }
     void this.origin;
   }

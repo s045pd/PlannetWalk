@@ -4,6 +4,9 @@ import type { Engine } from '../core/Engine';
 import type { Physics } from '../physics/Physics';
 import type { Input } from '../core/Input';
 import type { Rideable, VehicleHud } from './Rideable';
+import type { ParticlePool } from '../fx/ParticlePool';
+
+const DUST_COLOR = new THREE.Color(0.62, 0.5, 0.36);
 
 const WHEEL_R = 0.45;
 const REST = 0.55;
@@ -30,6 +33,9 @@ export class Rover implements Rideable {
   private lookPitch = 0;
   private steer = 0;
   speedKmh = 0;
+  /** 车轮扬尘粒子池（main 注入） */
+  dust: ParticlePool | null = null;
+  private dustTimer = 0;
 
   constructor(
     engine: Engine,
@@ -120,8 +126,22 @@ export class Rover implements Rideable {
   }
 
   fixedUpdate(input: Input, h: number, ridden: boolean): void {
-    const fwd = ridden ? (input.isDown('KeyW') ? 1 : input.isDown('KeyS') ? -0.6 : 0) : 0;
-    const targetSteer = ridden ? (input.isDown('KeyA') ? 1 : input.isDown('KeyD') ? -1 : 0) : 0;
+    const stickF = -input.moveAxis.y;
+    const stickS = -input.moveAxis.x;
+    const fwd = ridden
+      ? input.isDown('KeyW')
+        ? 1
+        : input.isDown('KeyS')
+          ? -0.6
+          : stickF * (stickF < 0 ? 0.6 : 1)
+      : 0;
+    const targetSteer = ridden
+      ? input.isDown('KeyA')
+        ? 1
+        : input.isDown('KeyD')
+          ? -1
+          : stickS
+      : 0;
     const brake = ridden ? (input.isDown('Space') ? 18 : 0) : 4; // 停车常刹
 
     const vel = this.body.linvel();
@@ -154,11 +174,35 @@ export class Rover implements Rideable {
     }
   }
 
-  update(): void {
+  update(dt: number): void {
     const t = this.body.translation();
     const q = this.body.rotation();
     this.chassis.position.set(t.x, t.y, t.z);
     this.chassis.quaternion.set(q.x, q.y, q.z, q.w);
+
+    // 车轮扬尘：接地且有速度时从后轮扬起
+    if (this.dust) {
+      const vel = this.body.linvel();
+      const speed = Math.hypot(vel.x, vel.z);
+      this.dustTimer -= dt;
+      if (speed > 3 && this.dustTimer <= 0) {
+        this.dustTimer = 0.05;
+        for (const wi of [4, 5]) {
+          if (!this.vc.wheelIsInContact(wi)) continue;
+          const wp = this.wheels[wi].getWorldPosition(TMP_V);
+          TMP_V2.set(
+            -vel.x * 0.25 + (Math.random() - 0.5) * 1.2,
+            1.2 + Math.random() * 1.4,
+            -vel.z * 0.25 + (Math.random() - 0.5) * 1.2,
+          );
+          this.dust.spawn(TMP_V.setY(wp.y - 0.3), TMP_V2, {
+            size: 0.35 + Math.random() * 0.3 + speed * 0.02,
+            life: 0.9 + Math.random() * 0.7,
+            color: DUST_COLOR,
+          });
+        }
+      }
+    }
 
     // 车轮视觉：悬挂长度 + 滚动 + 转向
     for (let i = 0; i < 6; i++) {
@@ -199,3 +243,5 @@ export class Rover implements Rideable {
 }
 
 const TMP_Q = new THREE.Quaternion();
+const TMP_V = new THREE.Vector3();
+const TMP_V2 = new THREE.Vector3();

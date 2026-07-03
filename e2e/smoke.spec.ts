@@ -21,6 +21,8 @@ async function boot(page: Page): Promise<string[]> {
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
+  // 每次导航前清空存档/偏好，保证确定性出生点与画质
+  await page.addInitScript(() => localStorage.clear());
   await page.goto('/');
   await page.waitForFunction(() => window.__game?.ready, undefined, { timeout: 60000 });
   return errors;
