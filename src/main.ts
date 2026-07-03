@@ -5,6 +5,8 @@ import { FloatingOrigin } from './world/FloatingOrigin';
 import { Physics } from './physics/Physics';
 import { Player } from './player/Player';
 import { citySiteAt, type CitySite } from './world/citySites';
+import { Sky } from './sky/Sky';
+import { DayNight } from './sky/DayNight';
 
 const SEED = 20260703;
 
@@ -25,13 +27,10 @@ function findSpawnCity(seed: number): CitySite {
 async function init(): Promise<void> {
   const canvas = document.getElementById('app') as HTMLCanvasElement;
   const engine = new Engine(canvas);
-  engine.scene.background = new THREE.Color(0x8a7a66);
   engine.scene.fog = new THREE.Fog(0x8a7a66, 200, 900);
 
-  const sun = new THREE.DirectionalLight(0xfff2df, 2.2);
-  sun.position.set(300, 400, 200);
-  engine.scene.add(sun);
-  engine.scene.add(new THREE.HemisphereLight(0xcbd8ee, 0x51443a, 0.7));
+  const sky = new Sky(engine.scene);
+  const dayNight = new DayNight(engine, sky);
 
   const origin = new FloatingOrigin();
 
@@ -64,6 +63,7 @@ async function init(): Promise<void> {
   engine.add(player);
   engine.add(physics);
   engine.add(terrain);
+  engine.add(dayNight);
   engine.add({
     update() {
       origin.check(player.localPosition());
@@ -82,6 +82,9 @@ async function init(): Promise<void> {
     }
   }, 200);
 
+  window.__game.setTimeOfDay = (t: number) => {
+    dayNight.timeOfDay = ((t % 1) + 1) % 1;
+  };
   window.__game.playerPos = () => {
     const w = player.worldPosition();
     return { x: w.x, y: w.y, z: w.z };
@@ -98,6 +101,7 @@ declare global {
       ready: boolean;
       playerPos?: () => { x: number; y: number; z: number };
       groundHeight?: () => number;
+      setTimeOfDay?: (t: number) => void;
     };
   }
 }
