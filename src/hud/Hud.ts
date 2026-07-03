@@ -8,6 +8,8 @@ import type { WeatherSystem } from '../weather/WeatherSystem';
 import type { VehicleManager } from '../vehicles/Rideable';
 import type { FloatingOrigin } from '../world/FloatingOrigin';
 import type { LogPickups } from '../story/LogPickups';
+import type { PoiManager } from '../world/PoiManager';
+import { PoiKind } from '../world/poi';
 
 const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const TMP_EULER = new THREE.Euler();
@@ -28,6 +30,10 @@ export class Hud {
   private prompt: HTMLElement;
   private logPanel: HTMLElement;
   private logBody: HTMLElement;
+  private poiMarker: HTMLElement;
+  private poiDist: HTMLElement;
+  /** 天气玩法：沙尘暴中罗盘失灵（C2 接线） */
+  compassScramble = 0;
   private updateTimer = 0;
   private typeText = '';
   private typeShown = 0;
@@ -42,12 +48,14 @@ export class Hud {
     private vehicles: VehicleManager,
     private origin: FloatingOrigin,
     private logs: LogPickups,
+    private poi: PoiManager,
   ) {
     this.el = document.createElement('div');
     this.el.id = 'hud';
     this.el.innerHTML = `
       <div class="crosshair"></div>
-      <div class="compass"><div class="compass-tape"></div></div>
+      <div class="compass"><div class="compass-tape"></div><div class="poi-marker">◆</div></div>
+      <div class="poi-dist"></div>
       <div class="panel" id="hud-left"></div>
       <div class="panel" id="hud-right"></div>
       <div class="panel" id="hud-time"></div>
@@ -63,6 +71,8 @@ export class Hud {
     this.prompt = this.el.querySelector('#hud-prompt')!;
     this.logPanel = this.el.querySelector('#hud-log')!;
     this.logBody = this.el.querySelector('#hud-log .log-body')!;
+    this.poiMarker = this.el.querySelector('.poi-marker')!;
+    this.poiDist = this.el.querySelector('.poi-dist')!;
 
     // 日志拾取 → 打字机呈现
     engine.bus.on('log:collected', ({ title, body, already, count, total }) => {
@@ -114,9 +124,33 @@ export class Hud {
     }
 
     // 罗盘每帧（平滑），面板 10Hz
-    const yawDeg = ((-this.getYaw() * 180) / Math.PI + 360 * 4) % 360;
+    const yaw = this.getYaw();
+    const yawDeg = ((-yaw * 180) / Math.PI + 360 * 4) % 360;
     const px = (yawDeg / 360) * (60 * 8);
     this.tape.style.transform = `translateX(${160 - 60 * 8 - px + 30}px)`;
+
+    // POI 信标：罗盘上的菱形标记 + 距离
+    const w = this.player.worldPosition();
+    const near = this.poi.nearestFrom(w.x, w.z);
+    if (near && this.compassScramble < 0.5) {
+      let delta = near.bearing - yaw;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      const deltaDeg = (delta * 180) / Math.PI;
+      if (Math.abs(deltaDeg) < 110) {
+        this.poiMarker.style.display = 'block';
+        this.poiMarker.style.left = `${160 - deltaDeg * (60 / 45) - 6}px`;
+      } else {
+        this.poiMarker.style.display = 'none';
+      }
+      const kindName =
+        near.site.kind === PoiKind.WRECK ? '残骸' : near.site.kind === PoiKind.TOWER ? '信标塔' : '坠落点';
+      this.poiDist.textContent = `◆ ${kindName} ${near.dist >= 1000 ? (near.dist / 1000).toFixed(2) + ' km' : Math.round(near.dist) + ' m'}`;
+      this.poiDist.style.display = 'block';
+    } else {
+      this.poiMarker.style.display = 'none';
+      this.poiDist.style.display = 'none';
+    }
 
     this.updateTimer -= dt;
     if (this.updateTimer > 0) return;

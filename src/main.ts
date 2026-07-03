@@ -17,6 +17,7 @@ import { Rover } from './vehicles/Rover';
 import { Hovercraft } from './vehicles/Hovercraft';
 import { Hud } from './hud/Hud';
 import { LogPickups } from './story/LogPickups';
+import { PoiManager } from './world/PoiManager';
 import { AudioSystem } from './audio/AudioSystem';
 import { Settings, createDebugPanel } from './core/Settings';
 import { WeatherSystem } from './weather/WeatherSystem';
@@ -100,7 +101,26 @@ async function init(): Promise<void> {
   origin.onShift((_, total) => terrain.shiftOrigin(total));
 
   const logPickups = new LogPickups(engine, SEED, terrain.hf, origin, player);
-  const hud = new Hud(engine, player, dayNight, terrain, weather, vehicles, origin, logPickups);
+  const poiManager = new PoiManager(
+    engine.scene,
+    SEED,
+    terrain.hf,
+    origin,
+    physics,
+    logPickups,
+    worldFocus,
+  );
+  const hud = new Hud(
+    engine,
+    player,
+    dayNight,
+    terrain,
+    weather,
+    vehicles,
+    origin,
+    logPickups,
+    poiManager,
+  );
   const audio = new AudioSystem(engine, player, weather, vehicles, terrain.hf);
   const settings = new Settings(engine, dayNight, terrain, particles, postfx);
   createDebugPanel(engine);
@@ -116,6 +136,7 @@ async function init(): Promise<void> {
   engine.add(particles);
   engine.add(lightning);
   engine.add(logPickups);
+  engine.add(poiManager);
   engine.add(hud);
   engine.add(audio);
   engine.add(settings);
@@ -176,6 +197,8 @@ async function init(): Promise<void> {
     hovercraft,
     player,
     logPickups,
+    poiManager,
+    hud,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();

@@ -62,6 +62,23 @@
   opacity: 0.85;
 }
 
+.poi-marker {
+  position: absolute;
+  top: 12px;
+  font-size: 10px;
+  color: #ffb36b;
+  text-shadow: 0 0 6px rgba(255, 150, 80, 0.8);
+}
+.poi-dist {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: rgba(255, 179, 107, 0.85);
+  letter-spacing: 1px;
+}
+
 .panel {
   position: absolute;
   padding: 8px 12px;
