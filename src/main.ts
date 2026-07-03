@@ -84,8 +84,8 @@ async function init(): Promise<void> {
   const scatter = new Scatter(engine.scene, SEED, terrain.hf, origin, worldFocus);
   const weather = new WeatherSystem(engine, dayNight, sky, terrain);
   const particles = new Particles(engine, weather, SEED);
-  const lightning = new Lightning(engine, sky, weather);
   const player = new Player(engine, physics, origin, spawnWorld.clone());
+  const lightning = new Lightning(engine, sky, weather, player, terrain);
   player.yaw = Math.atan2(spawnWorld.x - city.x, spawnWorld.z - city.z);
   playerRef = player;
 
@@ -258,6 +258,7 @@ async function init(): Promise<void> {
     poiManager,
     hud,
     origin,
+    lightning,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();

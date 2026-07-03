@@ -38,6 +38,7 @@ export class Player {
   jetThrusting = false;
   /** 喷焰粒子池（main 注入） */
   flames: ParticlePool | null = null;
+  private shockTimer = 0;
 
   constructor(
     private engine: Engine,
@@ -55,6 +56,17 @@ export class Player {
     origin.onShift((shift) => {
       this.prevPos.sub(shift);
       this.currPos.sub(shift);
+    });
+    // 近雷击：击退 + 燃料损失 + 短暂视角抖动
+    engine.bus.on('player:shocked', ({ intensity }) => {
+      if (this.riding) return;
+      this.vy = Math.min(this.vy, -2);
+      this.horizVel.set((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8);
+      this.jetpack = {
+        fuel: Math.max(0, this.jetpack.fuel - 0.2 * intensity),
+        sinceUsed: 0,
+      };
+      this.shockTimer = 0.8;
     });
   }
 
@@ -176,11 +188,20 @@ export class Player {
     }
     this.landDip = Math.max(0, this.landDip - dt * 0.5);
 
+    // 雷击视角抖动
+    this.shockTimer = Math.max(0, this.shockTimer - dt);
+    const shake = this.shockTimer * 0.05;
+
     const cam = this.engine.camera;
     cam.position.lerpVectors(this.prevPos, this.currPos, alpha);
     cam.position.y +=
       EYE_OFFSET + this.bobAmp * 0.045 * Math.sin(this.bobPhase * 2) - this.landDip;
     cam.position.x += this.bobAmp * 0.03 * Math.sin(this.bobPhase);
-    cam.rotation.set(this.pitch, this.yaw, this.bobAmp * 0.006 * Math.sin(this.bobPhase), 'YXZ');
+    cam.rotation.set(
+      this.pitch + (Math.random() - 0.5) * shake,
+      this.yaw + (Math.random() - 0.5) * shake,
+      this.bobAmp * 0.006 * Math.sin(this.bobPhase) + (Math.random() - 0.5) * shake,
+      'YXZ',
+    );
   }
 }

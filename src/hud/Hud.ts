@@ -106,6 +106,9 @@ export class Hud {
   }
 
   update(dt: number): void {
+    // 沙尘暴罗盘失灵因子
+    this.compassScramble = Math.max(0, Math.min(1, (this.weather.params.dustRate - 0.6) / 0.3));
+
     // 打字机推进
     if (this.typeText) {
       this.typeShown = Math.min(this.typeText.length, this.typeShown + dt * 28);
@@ -123,11 +126,18 @@ export class Hud {
       }
     }
 
-    // 罗盘每帧（平滑），面板 10Hz
+    // 罗盘每帧（平滑），面板 10Hz；沙尘暴中乱跳
     const yaw = this.getYaw();
-    const yawDeg = ((-yaw * 180) / Math.PI + 360 * 4) % 360;
+    const scramble =
+      this.compassScramble > 0
+        ? (Math.sin(performance.now() * 0.013) + Math.sin(performance.now() * 0.037)) *
+          0.7 *
+          this.compassScramble
+        : 0;
+    const yawDeg = ((-(yaw + scramble) * 180) / Math.PI + 360 * 4) % 360;
     const px = (yawDeg / 360) * (60 * 8);
     this.tape.style.transform = `translateX(${160 - 60 * 8 - px + 30}px)`;
+    this.tape.style.opacity = this.compassScramble > 0.5 ? '0.4' : '1';
 
     // POI 信标：罗盘上的菱形标记 + 距离
     const w = this.player.worldPosition();
