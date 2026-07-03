@@ -17,6 +17,7 @@ import { Rover } from './vehicles/Rover';
 import { Hovercraft } from './vehicles/Hovercraft';
 import { Hud } from './hud/Hud';
 import { AudioSystem } from './audio/AudioSystem';
+import { Settings, createDebugPanel } from './core/Settings';
 import { WeatherSystem } from './weather/WeatherSystem';
 import { Particles } from './weather/Particles';
 import { Lightning } from './weather/Lightning';
@@ -99,6 +100,8 @@ async function init(): Promise<void> {
 
   const hud = new Hud(engine, player, dayNight, terrain, weather, vehicles, origin);
   const audio = new AudioSystem(engine, player, weather, vehicles, terrain.hf);
+  const settings = new Settings(engine, dayNight, terrain, particles, postfx);
+  createDebugPanel(engine);
 
   engine.add(player);
   engine.add(vehicles);
@@ -112,6 +115,7 @@ async function init(): Promise<void> {
   engine.add(lightning);
   engine.add(hud);
   engine.add(audio);
+  engine.add(settings);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
@@ -153,6 +157,8 @@ async function init(): Promise<void> {
   window.__game.teleportToCity = () => {
     window.__game.teleport!(city.x, city.z);
   };
+  window.__game.getFps = () => engine.fps;
+  window.__game.setQuality = (t: 'low' | 'medium' | 'high') => settings.apply(t);
   window.__game.debug = {
     engine,
     sky,
@@ -188,6 +194,8 @@ declare global {
       setWeather?: (name: string, duration?: number) => void;
       teleport?: (x: number, z: number) => void;
       teleportToCity?: () => void;
+      getFps?: () => number;
+      setQuality?: (t: 'low' | 'medium' | 'high') => void;
       debug?: Record<string, unknown>;
     };
   }
