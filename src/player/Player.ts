@@ -83,6 +83,8 @@ export class Player {
     const blend = this.cc.grounded ? 1 : AIR_CONTROL * 10 * h;
     this.horizVel.lerp(target, Math.min(1, blend));
 
+    const prevVy = this.vy;
+    const wasGrounded = this.cc.grounded;
     this.vy -= GRAVITY * h;
 
     // 喷气背包：空中按住 Space 持续喷射
@@ -96,7 +98,10 @@ export class Player {
     }
 
     if (this.cc.grounded) {
-      if (this.vy < -8) this.landDip = Math.min(0.18, -this.vy * 0.012);
+      if (!wasGrounded && prevVy < -6) {
+        this.landDip = Math.min(0.18, -prevVy * 0.012);
+        this.engine.bus.emit('player:landed', { speed: -prevVy });
+      }
       if (this.vy < 0) this.vy = -1.5; // 贴地
       if (input.isDown('Space')) this.vy = JUMP_SPEED;
     }
@@ -113,6 +118,10 @@ export class Player {
     this.prevPos.copy(this.currPos);
     this.currPos.set(p.x, p.y, p.z);
     this.speed = Math.hypot(actual.x, actual.z) / h;
+  }
+
+  groundedNow(): boolean {
+    return this.cc.grounded;
   }
 
   /** 上/下载具：乘载时禁用胶囊碰撞，实体位置由 VehicleManager 同步 */

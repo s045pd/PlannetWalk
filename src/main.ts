@@ -16,6 +16,7 @@ import { VehicleManager } from './vehicles/Rideable';
 import { Rover } from './vehicles/Rover';
 import { Hovercraft } from './vehicles/Hovercraft';
 import { Hud } from './hud/Hud';
+import { AudioSystem } from './audio/AudioSystem';
 import { WeatherSystem } from './weather/WeatherSystem';
 import { Particles } from './weather/Particles';
 import { Lightning } from './weather/Lightning';
@@ -97,6 +98,7 @@ async function init(): Promise<void> {
   origin.onShift((_, total) => terrain.shiftOrigin(total));
 
   const hud = new Hud(engine, player, dayNight, terrain, weather, vehicles, origin);
+  const audio = new AudioSystem(engine, player, weather, vehicles, terrain.hf);
 
   engine.add(player);
   engine.add(vehicles);
@@ -109,6 +111,7 @@ async function init(): Promise<void> {
   engine.add(particles);
   engine.add(lightning);
   engine.add(hud);
+  engine.add(audio);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
