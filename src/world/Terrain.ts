@@ -9,7 +9,10 @@ const LOD0_RES = 64;
 interface ChunkRecord {
   mesh: THREE.Mesh | null;
   res: number;
+  /** 期望分辨率（与 res 不同则需要生成/升降级） */
   pendingRes: number | null;
+  /** 已派发给 worker 且未返回 */
+  inFlight: boolean;
   /** LOD0 物理数据（供 Rapier trimesh），仅 res=64 时保留 */
   physics: { positions: Float32Array; indices: Uint32Array } | null;
 }
@@ -17,6 +20,7 @@ interface ChunkRecord {
 interface WorkerSlot {
   worker: Worker;
   busy: boolean;
+  currentKey: string | null;
 }
 
 /** 环形 LOD 区块地形管理器：worker 流式生成、按距离分级、floating origin 感知 */
@@ -45,14 +49,20 @@ export class Terrain {
       const worker = new Worker(new URL('./terrain.worker.ts', import.meta.url), {
         type: 'module',
       });
-      const slot: WorkerSlot = { worker, busy: false };
+      const slot: WorkerSlot = { worker, busy: false, currentKey: null };
       worker.onmessage = (e: MessageEvent<ChunkResult>) => {
         slot.busy = false;
+        slot.currentKey = null;
         this.onChunkData(e.data);
         this.dispatch();
       };
       worker.onerror = (e) => {
+        if (slot.currentKey) {
+          const rec = this.chunks.get(slot.currentKey);
+          if (rec) rec.inFlight = false;
+        }
         slot.busy = false;
+        slot.currentKey = null;
         console.error('[terrain.worker]', e.message);
         this.dispatch();
       };
@@ -140,14 +150,16 @@ export class Terrain {
     this.queue = [];
     for (const w of wanted) {
       const key = `${w.cx},${w.cz}`;
-      const rec = this.chunks.get(key);
+      let rec = this.chunks.get(key);
       if (!rec) {
-        this.chunks.set(key, { mesh: null, res: 0, pendingRes: w.res, physics: null });
-        this.queue.push(w);
-      } else if (rec.res !== w.res && rec.pendingRes !== w.res) {
+        rec = { mesh: null, res: 0, pendingRes: w.res, inFlight: false, physics: null };
+        this.chunks.set(key, rec);
+      } else if (rec.res !== w.res) {
         rec.pendingRes = w.res;
-        this.queue.push(w);
+      } else {
+        rec.pendingRes = null; // 已是期望分辨率
       }
+      if (rec.pendingRes !== null && !rec.inFlight) this.queue.push(w);
     }
 
     // 卸载远端区块
@@ -167,11 +179,19 @@ export class Terrain {
   private dispatch(): void {
     for (const slot of this.slots) {
       if (slot.busy) continue;
-      const next = this.queue.shift();
-      if (!next) return;
-      const rec = this.chunks.get(`${next.cx},${next.cz}`);
-      if (!rec || rec.pendingRes !== next.res) continue;
+      // 跳过过期/在途的队列项，直到找到有效任务
+      let next: { cx: number; cz: number; res: number } | undefined;
+      let rec: ChunkRecord | undefined;
+      for (;;) {
+        next = this.queue.shift();
+        if (!next) return;
+        const key = `${next.cx},${next.cz}`;
+        rec = this.chunks.get(key);
+        if (rec && !rec.inFlight && rec.pendingRes === next.res) break;
+      }
+      rec!.inFlight = true;
       slot.busy = true;
+      slot.currentKey = `${next.cx},${next.cz}`;
       const req: ChunkRequest = {
         id: this.reqId++,
         cx: next.cx,
@@ -187,7 +207,9 @@ export class Terrain {
   private onChunkData(data: ChunkResult): void {
     const key = `${data.cx},${data.cz}`;
     const rec = this.chunks.get(key);
-    if (!rec || rec.pendingRes !== data.res) return; // 已过期
+    if (!rec) return; // 已卸载
+    rec.inFlight = false;
+    if (rec.pendingRes !== data.res) return; // 期望已变更，丢弃
     if (rec.mesh) {
       this.group.remove(rec.mesh);
       rec.mesh.geometry.dispose();
