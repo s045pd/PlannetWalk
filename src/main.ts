@@ -18,6 +18,7 @@ import { Rover } from './vehicles/Rover';
 import { Hovercraft } from './vehicles/Hovercraft';
 import { Hud } from './hud/Hud';
 import { PhotoMode } from './player/PhotoMode';
+import { Scanner } from './player/Scanner';
 import { ParticlePool } from './fx/ParticlePool';
 import { LogPickups } from './story/LogPickups';
 import { PoiManager } from './world/PoiManager';
@@ -152,6 +153,7 @@ async function init(): Promise<void> {
   const audio = new AudioSystem(engine, player, weather, vehicles, terrain.hf);
   const settings = new Settings(engine, dayNight, terrain, particles, postfx);
   const photoMode = new PhotoMode(engine);
+  const scanner = new Scanner(engine, player, poiManager, logPickups, origin, terrain.hf);
   createDebugPanel(engine);
 
   // 存档恢复与自动写档
@@ -195,6 +197,7 @@ async function init(): Promise<void> {
   engine.add(audio);
   engine.add(settings);
   engine.add(photoMode);
+  engine.add(scanner);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
@@ -259,6 +262,7 @@ async function init(): Promise<void> {
     hud,
     origin,
     lightning,
+    scanner,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();

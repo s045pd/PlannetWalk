@@ -65,6 +65,15 @@ export class LogPickups {
     origin.onShift(() => this.repositionAll());
   }
 
+  /** 扫描仪：范围内未拾取的点位（世界坐标） */
+  spotsWithin(x: number, z: number, range: number): LogSpot[] {
+    const out: LogSpot[] = [];
+    for (const s of this.spots.values()) {
+      if (Math.hypot(s.x - x, s.z - z) <= range) out.push(s);
+    }
+    return out;
+  }
+
   /** 存档恢复 */
   restore(collected: string[], usedKeys: string[]): void {
     this.collected = new Set(collected);

@@ -76,6 +76,21 @@ export class PoiManager {
     origin.onShift(() => this.repositionAll());
   }
 
+  /** 扫描仪：范围内全部 POI（世界坐标） */
+  allWithin(x: number, z: number, range: number): PoiSite[] {
+    const out: PoiSite[] = [];
+    const ccx = Math.floor(x / POI_CELL);
+    const ccz = Math.floor(z / POI_CELL);
+    const r = Math.ceil(range / POI_CELL) + 1;
+    for (let j = -r; j <= r; j++) {
+      for (let i = -r; i <= r; i++) {
+        const p = poiSiteAt(this.seed, ccx + i, ccz + j);
+        if (p && Math.hypot(x - p.x, z - p.z) <= range) out.push(p);
+      }
+    }
+    return out;
+  }
+
   /** 供 HUD 罗盘信标查询：最近 POI（世界坐标） */
   nearestFrom(x: number, z: number): { site: PoiSite; dist: number; bearing: number } | null {
     let best: PoiSite | null = null;

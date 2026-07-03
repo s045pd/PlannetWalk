@@ -24,6 +24,7 @@ export class Input {
 
   constructor(private canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', (e) => {
+      if (e.code === 'Tab') e.preventDefault(); // 扫描键，阻止焦点切换
       if (!this.keys.has(e.code)) this.pressed.add(e.code);
       this.keys.add(e.code);
     });
