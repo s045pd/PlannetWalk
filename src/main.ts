@@ -15,6 +15,7 @@ import { Scatter } from './world/Scatter';
 import { VehicleManager } from './vehicles/Rideable';
 import { Rover } from './vehicles/Rover';
 import { Hovercraft } from './vehicles/Hovercraft';
+import { Hud } from './hud/Hud';
 import { WeatherSystem } from './weather/WeatherSystem';
 import { Particles } from './weather/Particles';
 import { Lightning } from './weather/Lightning';
@@ -95,6 +96,8 @@ async function init(): Promise<void> {
 
   origin.onShift((_, total) => terrain.shiftOrigin(total));
 
+  const hud = new Hud(engine, player, dayNight, terrain, weather, vehicles, origin);
+
   engine.add(player);
   engine.add(vehicles);
   engine.add(physics);
@@ -105,6 +108,7 @@ async function init(): Promise<void> {
   engine.add(weather);
   engine.add(particles);
   engine.add(lightning);
+  engine.add(hud);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
