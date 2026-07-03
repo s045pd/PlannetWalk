@@ -5,6 +5,7 @@ import { FloatingOrigin } from './world/FloatingOrigin';
 import { Physics } from './physics/Physics';
 import { Player } from './player/Player';
 import { citySiteAt, type CitySite } from './world/citySites';
+import { smoothstep } from './world/noise';
 import { Sky } from './sky/Sky';
 import { DayNight } from './sky/DayNight';
 import { Stars } from './sky/Stars';
@@ -144,6 +145,7 @@ async function init(): Promise<void> {
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
       debrisRing.update(engine.camera.position, dayNight.sunElevation, dt);
+      ruins.setNightFactor(smoothstep(0.05, -0.12, dayNight.sunElevation));
       origin.check(player.localPosition());
     },
   });
