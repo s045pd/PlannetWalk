@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import type { Engine } from './Engine';
 import type { DayNight } from '../sky/DayNight';
 import type { Terrain } from '../world/Terrain';
