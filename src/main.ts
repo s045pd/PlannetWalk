@@ -10,6 +10,8 @@ import { DayNight } from './sky/DayNight';
 import { Stars } from './sky/Stars';
 import { DebrisRing } from './sky/DebrisRing';
 import { PostFX } from './fx/PostFX';
+import { WeatherSystem } from './weather/WeatherSystem';
+import type { WeatherName } from './weather/weatherStates';
 
 const SEED = 20260703;
 
@@ -60,6 +62,7 @@ async function init(): Promise<void> {
   spawnWorld.y = terrain.heightAt(spawnWorld.x, spawnWorld.z) + 1.6;
 
   const physics = await Physics.create(terrain, origin, worldFocus);
+  const weather = new WeatherSystem(engine, dayNight, sky, terrain);
   const player = new Player(engine, physics, origin, spawnWorld.clone());
   player.yaw = Math.atan2(spawnWorld.x - city.x, spawnWorld.z - city.z);
   playerRef = player;
@@ -70,6 +73,7 @@ async function init(): Promise<void> {
   engine.add(physics);
   engine.add(terrain);
   engine.add(dayNight);
+  engine.add(weather);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
@@ -97,6 +101,9 @@ async function init(): Promise<void> {
     player.yaw = yaw;
     player.pitch = pitch;
   };
+  window.__game.setWeather = (name: string, duration = 3) => {
+    weather.setWeather(name as WeatherName, duration);
+  };
   window.__game.debug = { engine, sky, dayNight, debrisRing, postfx };
   window.__game.playerPos = () => {
     const w = player.worldPosition();
@@ -116,6 +123,7 @@ declare global {
       groundHeight?: () => number;
       setTimeOfDay?: (t: number) => void;
       setView?: (yaw: number, pitch: number) => void;
+      setWeather?: (name: string, duration?: number) => void;
       debug?: Record<string, unknown>;
     };
   }
