@@ -152,8 +152,22 @@ export class Hovercraft implements Rideable {
 
     // 推进（未乘坐时仅悬浮）
     const boost = ridden && input.isDown('ShiftLeft') ? 1.8 : 1;
-    const fwdIn = ridden ? (input.isDown('KeyW') ? 1 : input.isDown('KeyS') ? -0.6 : 0) : 0;
-    const yawIn = ridden ? (input.isDown('KeyA') ? 1 : input.isDown('KeyD') ? -1 : 0) : 0;
+    const stickF = -input.moveAxis.y;
+    const stickS = -input.moveAxis.x;
+    const fwdIn = ridden
+      ? input.isDown('KeyW')
+        ? 1
+        : input.isDown('KeyS')
+          ? -0.6
+          : stickF * (stickF < 0 ? 0.6 : 1)
+      : 0;
+    const yawIn = ridden
+      ? input.isDown('KeyA')
+        ? 1
+        : input.isDown('KeyD')
+          ? -1
+          : stickS
+      : 0;
     this.thrustLevel = Math.abs(fwdIn) * boost;
     const fwd = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
     fwd.y = 0;

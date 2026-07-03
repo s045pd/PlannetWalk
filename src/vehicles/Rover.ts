@@ -126,8 +126,22 @@ export class Rover implements Rideable {
   }
 
   fixedUpdate(input: Input, h: number, ridden: boolean): void {
-    const fwd = ridden ? (input.isDown('KeyW') ? 1 : input.isDown('KeyS') ? -0.6 : 0) : 0;
-    const targetSteer = ridden ? (input.isDown('KeyA') ? 1 : input.isDown('KeyD') ? -1 : 0) : 0;
+    const stickF = -input.moveAxis.y;
+    const stickS = -input.moveAxis.x;
+    const fwd = ridden
+      ? input.isDown('KeyW')
+        ? 1
+        : input.isDown('KeyS')
+          ? -0.6
+          : stickF * (stickF < 0 ? 0.6 : 1)
+      : 0;
+    const targetSteer = ridden
+      ? input.isDown('KeyA')
+        ? 1
+        : input.isDown('KeyD')
+          ? -1
+          : stickS
+      : 0;
     const brake = ridden ? (input.isDown('Space') ? 18 : 0) : 4; // 停车常刹
 
     const vel = this.body.linvel();

@@ -97,7 +97,10 @@ export class Player {
     if (input.isDown('KeyS')) wish.sub(fwd);
     if (input.isDown('KeyD')) wish.add(right);
     if (input.isDown('KeyA')) wish.sub(right);
-    if (wish.lengthSq() > 0) wish.normalize();
+    // 手柄左摇杆（模拟量）
+    wish.addScaledVector(fwd, -input.moveAxis.y);
+    wish.addScaledVector(right, input.moveAxis.x);
+    if (wish.lengthSq() > 1) wish.normalize();
     const target = wish.multiplyScalar(input.isDown('ShiftLeft') ? RUN_SPEED : WALK_SPEED);
 
     // 地面即时响应，空中弱操控

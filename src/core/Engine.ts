@@ -80,6 +80,7 @@ export class Engine {
   }
 
   private frame(): void {
+    this.input.pollGamepad();
     const rawDt = Math.min(this.clock.getDelta(), 0.1);
     const dt = rawDt * this.timeScale;
     const { steps, acc, alpha } = advanceFixed(this.acc, dt, FIXED_H);
