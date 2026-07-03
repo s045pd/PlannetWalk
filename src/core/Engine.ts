@@ -28,6 +28,8 @@ export class Engine {
   fps = 60;
   private fpsAcc = 0;
   private fpsFrames = 0;
+  private running = false;
+  private hiddenTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -55,7 +57,20 @@ export class Engine {
   }
 
   start(): void {
+    this.running = true;
     this.renderer.setAnimationLoop(() => this.frame());
+    // 标签页隐藏时 rAF 停摆：降级用定时器驱动，保持物理与流式加载运转
+    document.addEventListener('visibilitychange', () => this.syncHiddenTicker());
+    this.syncHiddenTicker();
+  }
+
+  private syncHiddenTicker(): void {
+    if (document.hidden && this.running && !this.hiddenTimer) {
+      this.hiddenTimer = setInterval(() => this.frame(), 100);
+    } else if (!document.hidden && this.hiddenTimer) {
+      clearInterval(this.hiddenTimer);
+      this.hiddenTimer = null;
+    }
   }
 
   private frame(): void {

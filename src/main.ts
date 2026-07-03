@@ -1,60 +1,109 @@
 import * as THREE from 'three';
 import { Engine } from './core/Engine';
 import { Terrain } from './world/Terrain';
+import { FloatingOrigin } from './world/FloatingOrigin';
+import { Physics } from './physics/Physics';
+import { Player } from './player/Player';
+import { citySiteAt, type CitySite } from './world/citySites';
 
 const SEED = 20260703;
 
-const canvas = document.getElementById('app') as HTMLCanvasElement;
-const engine = new Engine(canvas);
-engine.scene.background = new THREE.Color(0x8a7a66);
-engine.scene.fog = new THREE.Fog(0x8a7a66, 200, 900);
+/** 由原点向外环搜最近城市站点（种子确定性，必能找到） */
+function findSpawnCity(seed: number): CitySite {
+  for (let r = 0; r < 64; r++) {
+    for (let cx = -r; cx <= r; cx++) {
+      for (let cz = -r; cz <= r; cz++) {
+        if (Math.max(Math.abs(cx), Math.abs(cz)) !== r) continue;
+        const site = citySiteAt(seed, cx, cz);
+        if (site) return site;
+      }
+    }
+  }
+  throw new Error('no city site found within search range');
+}
 
-const sun = new THREE.DirectionalLight(0xfff2df, 2.2);
-sun.position.set(300, 400, 200);
-engine.scene.add(sun);
-engine.scene.add(new THREE.HemisphereLight(0xcbd8ee, 0x51443a, 0.7));
+async function init(): Promise<void> {
+  const canvas = document.getElementById('app') as HTMLCanvasElement;
+  const engine = new Engine(canvas);
+  engine.scene.background = new THREE.Color(0x8a7a66);
+  engine.scene.fog = new THREE.Fog(0x8a7a66, 200, 900);
 
-// 临时自由飞行相机（Task 7 由 Player 替换）
-const camPos = new THREE.Vector3(0, 0, 0);
-let yaw = 0;
-let pitch = -0.2;
+  const sun = new THREE.DirectionalLight(0xfff2df, 2.2);
+  sun.position.set(300, 400, 200);
+  engine.scene.add(sun);
+  engine.scene.add(new THREE.HemisphereLight(0xcbd8ee, 0x51443a, 0.7));
 
-const terrain = new Terrain(engine.scene, SEED, () => ({ x: camPos.x, z: camPos.z }));
-camPos.y = terrain.heightAt(0, 0) + 30;
+  const origin = new FloatingOrigin();
 
-engine.add({
-  update(dt) {
-    const m = engine.input.consumeMouse();
-    yaw -= m.dx * 0.002;
-    pitch = Math.max(-1.5, Math.min(1.5, pitch - m.dy * 0.002));
-    const speed = engine.input.isDown('ShiftLeft') ? 120 : 30;
-    const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-    const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
-    if (engine.input.isDown('KeyW')) camPos.addScaledVector(fwd, speed * dt);
-    if (engine.input.isDown('KeyS')) camPos.addScaledVector(fwd, -speed * dt);
-    if (engine.input.isDown('KeyD')) camPos.addScaledVector(right, speed * dt);
-    if (engine.input.isDown('KeyA')) camPos.addScaledVector(right, -speed * dt);
-    if (engine.input.isDown('KeyE')) camPos.y += speed * dt;
-    if (engine.input.isDown('KeyQ')) camPos.y -= speed * dt;
-    const minY = terrain.heightAt(camPos.x, camPos.z) + 2;
-    if (camPos.y < minY) camPos.y = minY;
-    engine.camera.position.copy(camPos);
-    engine.camera.rotation.set(pitch, yaw, 0, 'YXZ');
-    terrain.update(dt);
-  },
-});
+  // 出生点：最近城市边缘外 80m，面向城市
+  const city = findSpawnCity(SEED);
+  const spawnDir = Math.PI * 0.25;
+  const spawnWorld = new THREE.Vector3(
+    city.x + Math.cos(spawnDir) * (city.radius + 80),
+    0,
+    city.z + Math.sin(spawnDir) * (city.radius + 80),
+  );
 
-engine.start();
+  let playerRef: Player | null = null;
+  const worldFocus = (): { x: number; z: number } => {
+    if (!playerRef) return { x: spawnWorld.x, z: spawnWorld.z };
+    const w = playerRef.worldPosition();
+    return { x: w.x, z: w.z };
+  };
+
+  const terrain = new Terrain(engine.scene, SEED, worldFocus);
+  spawnWorld.y = terrain.heightAt(spawnWorld.x, spawnWorld.z) + 1.6;
+
+  const physics = await Physics.create(terrain, origin, worldFocus);
+  const player = new Player(engine, physics, origin, spawnWorld.clone());
+  player.yaw = Math.atan2(spawnWorld.x - city.x, spawnWorld.z - city.z);
+  playerRef = player;
+
+  origin.onShift((_, total) => terrain.shiftOrigin(total));
+
+  engine.add(player);
+  engine.add(physics);
+  engine.add(terrain);
+  engine.add({
+    update() {
+      origin.check(player.localPosition());
+    },
+  });
+
+  engine.start();
+
+  // 地形碰撞就绪后激活玩家
+  const gate = setInterval(() => {
+    const w = player.worldPosition();
+    if (terrain.isReadyAround(1) && physics.hasColliderUnder(w.x, w.z)) {
+      player.active = true;
+      window.__game.ready = true;
+      clearInterval(gate);
+    }
+  }, 200);
+
+  window.__game.playerPos = () => {
+    const w = player.worldPosition();
+    return { x: w.x, y: w.y, z: w.z };
+  };
+  window.__game.groundHeight = () => {
+    const w = player.worldPosition();
+    return terrain.heightAt(w.x, w.z);
+  };
+}
 
 declare global {
   interface Window {
-    __game: { ready: boolean };
+    __game: {
+      ready: boolean;
+      playerPos?: () => { x: number; y: number; z: number };
+      groundHeight?: () => number;
+    };
   }
 }
 window.__game = { ready: false };
-const readyCheck = setInterval(() => {
-  if (terrain.isReadyAround(1)) {
-    window.__game.ready = true;
-    clearInterval(readyCheck);
-  }
-}, 250);
+
+init().catch((err) => {
+  console.error('[init]', err);
+  document.body.innerHTML = `<pre style="color:#f66;padding:2rem">初始化失败: ${String(err)}</pre>`;
+});
