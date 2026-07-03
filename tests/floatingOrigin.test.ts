@@ -14,7 +14,7 @@ describe('computeShift', () => {
 
   it('负方向同样回移', () => {
     const s = computeShift({ x: 0, z: -(THRESHOLD + 500) })!;
-    expect(s.z % 128).toBe(0);
+    expect(Math.abs(s.z % 128)).toBe(0);
     expect(Math.abs(-(THRESHOLD + 500) - s.z)).toBeLessThan(THRESHOLD);
   });
 });
