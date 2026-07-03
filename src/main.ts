@@ -9,6 +9,7 @@ import { Sky } from './sky/Sky';
 import { DayNight } from './sky/DayNight';
 import { Stars } from './sky/Stars';
 import { DebrisRing } from './sky/DebrisRing';
+import { PostFX } from './fx/PostFX';
 
 const SEED = 20260703;
 
@@ -35,6 +36,7 @@ async function init(): Promise<void> {
   const dayNight = new DayNight(engine, sky);
   const stars = new Stars(engine.scene, SEED);
   const debrisRing = new DebrisRing(engine.scene, SEED);
+  const postfx = new PostFX(engine);
 
   const origin = new FloatingOrigin();
 
@@ -95,7 +97,7 @@ async function init(): Promise<void> {
     player.yaw = yaw;
     player.pitch = pitch;
   };
-  window.__game.debug = { engine, sky, dayNight, debrisRing };
+  window.__game.debug = { engine, sky, dayNight, debrisRing, postfx };
   window.__game.playerPos = () => {
     const w = player.worldPosition();
     return { x: w.x, y: w.y, z: w.z };
