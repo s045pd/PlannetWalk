@@ -65,6 +65,12 @@ export class LogPickups {
     origin.onShift(() => this.repositionAll());
   }
 
+  /** 存档恢复 */
+  restore(collected: string[], usedKeys: string[]): void {
+    this.collected = new Set(collected);
+    this.usedSpotKeys = new Set(usedKeys);
+  }
+
   /** 供 POI 等外部系统注册数据板点位（世界坐标） */
   addSpot(key: string, x: number, z: number, logIndex: number): void {
     if (!this.spots.has(key) && !this.usedSpotKeys.has(key))

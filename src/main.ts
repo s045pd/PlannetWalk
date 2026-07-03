@@ -23,6 +23,7 @@ import { LogPickups } from './story/LogPickups';
 import { PoiManager } from './world/PoiManager';
 import { AudioSystem } from './audio/AudioSystem';
 import { Settings, createDebugPanel } from './core/Settings';
+import { loadSave, writeSave, clearSave, SAVE_VERSION } from './core/SaveGame';
 import { WeatherSystem } from './weather/WeatherSystem';
 import { Particles } from './weather/Particles';
 import { Lightning } from './weather/Lightning';
@@ -57,7 +58,8 @@ async function init(): Promise<void> {
 
   const origin = new FloatingOrigin();
 
-  // 出生点：最近城市边缘外 80m，面向城市
+  // 出生点：最近城市边缘外 80m，面向城市；有存档则回到存档位置
+  const save = loadSave();
   const city = findSpawnCity(SEED);
   const spawnDir = Math.PI * 0.25;
   const spawnWorld = new THREE.Vector3(
@@ -65,6 +67,7 @@ async function init(): Promise<void> {
     0,
     city.z + Math.sin(spawnDir) * (city.radius + 80),
   );
+  if (save) spawnWorld.set(save.playerWorld.x, save.playerWorld.y, save.playerWorld.z);
 
   let playerRef: Player | null = null;
   const worldFocus = (): { x: number; z: number } => {
@@ -74,7 +77,7 @@ async function init(): Promise<void> {
   };
 
   const terrain = new Terrain(engine.scene, SEED, worldFocus);
-  spawnWorld.y = terrain.heightAt(spawnWorld.x, spawnWorld.z) + 1.6;
+  if (!save) spawnWorld.y = terrain.heightAt(spawnWorld.x, spawnWorld.z) + 1.6;
 
   const physics = await Physics.create(terrain, origin, worldFocus);
   const ruins = new Ruins(engine.scene, SEED, terrain.hf, origin, physics, worldFocus);
@@ -151,6 +154,31 @@ async function init(): Promise<void> {
   const photoMode = new PhotoMode(engine);
   createDebugPanel(engine);
 
+  // 存档恢复与自动写档
+  if (save) {
+    dayNight.timeOfDay = save.timeOfDay;
+    weather.setWeather(save.weather as WeatherName, 0.5);
+    logPickups.restore(save.collectedLogs, save.usedSpotKeys);
+    settings.apply(save.quality);
+  }
+  const doSave = (): void => {
+    if (!window.__game.ready) return;
+    const w = player.worldPosition();
+    writeSave({
+      version: SAVE_VERSION,
+      playerWorld: { x: w.x, y: w.y, z: w.z },
+      timeOfDay: dayNight.timeOfDay,
+      weather: weather.core.current,
+      collectedLogs: [...logPickups.collected],
+      usedSpotKeys: [...logPickups.usedSpotKeys],
+      quality: settings.tier,
+    });
+  };
+  setInterval(doSave, 10000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) doSave();
+  });
+
   engine.add(player);
   engine.add(vehicles);
   engine.add(physics);
@@ -211,6 +239,8 @@ async function init(): Promise<void> {
   };
   window.__game.getFps = () => engine.fps;
   window.__game.setQuality = (t: 'low' | 'medium' | 'high') => settings.apply(t);
+  window.__game.saveNow = doSave;
+  window.__game.resetSave = clearSave;
   window.__game.debug = {
     engine,
     sky,
@@ -252,6 +282,8 @@ declare global {
       teleportToCity?: () => void;
       getFps?: () => number;
       setQuality?: (t: 'low' | 'medium' | 'high') => void;
+      saveNow?: () => void;
+      resetSave?: () => void;
       debug?: Record<string, unknown>;
     };
   }
