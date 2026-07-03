@@ -12,6 +12,8 @@ import {
   ToneMappingMode,
   BlendFunction,
 } from 'postprocessing';
+// @ts-expect-error n8ao 无类型声明
+import { N8AOPostPass } from 'n8ao';
 import type { Engine } from '../core/Engine';
 
 /** 曝光效果：位于色调映射之前，读取 renderer.toneMappingExposure（DayNight 继续驱动它） */
@@ -38,6 +40,8 @@ export class PostFX {
   private composer: EffectComposer;
   private exposureFx = new ExposureEffect();
   readonly bloom: BloomEffect;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private n8ao: any;
 
   constructor(engine: Engine) {
     // 场景以线性 HDR 渲染进半浮点缓冲，色调映射交给 EffectPass
@@ -46,6 +50,19 @@ export class PostFX {
       frameBufferType: THREE.HalfFloatType,
     });
     this.composer.addPass(new RenderPass(engine.scene, engine.camera));
+
+    // SSAO：城市街景的接触阴影
+    this.n8ao = new N8AOPostPass(
+      engine.scene,
+      engine.camera,
+      window.innerWidth,
+      window.innerHeight,
+    );
+    this.n8ao.configuration.aoRadius = 2.2;
+    this.n8ao.configuration.distanceFalloff = 3.5;
+    this.n8ao.configuration.intensity = 2.6;
+    this.n8ao.configuration.halfRes = true;
+    this.composer.addPass(this.n8ao);
 
     this.bloom = new BloomEffect({
       intensity: 0.75,
@@ -73,5 +90,7 @@ export class PostFX {
 
   setQuality(tier: 'low' | 'medium' | 'high'): void {
     this.bloom.blendMode.opacity.value = tier === 'low' ? 0 : 1;
+    this.n8ao.enabled = tier !== 'low';
+    this.n8ao.configuration.halfRes = tier !== 'high';
   }
 }
