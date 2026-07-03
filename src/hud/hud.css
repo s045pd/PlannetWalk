@@ -10,17 +10,59 @@
   z-index: 10;
 }
 
-/* 头盔面罩暗角 */
+/* 头盔面罩暗角 + 玻璃斜向反光 + 细微刮痕 */
 #hud::before {
   content: '';
   position: absolute;
   inset: 0;
+  background:
+    linear-gradient(
+      115deg,
+      transparent 30%,
+      rgba(190, 225, 255, 0.028) 38%,
+      rgba(190, 225, 255, 0.05) 42%,
+      rgba(190, 225, 255, 0.02) 47%,
+      transparent 55%,
+      transparent 68%,
+      rgba(190, 225, 255, 0.022) 72%,
+      transparent 78%
+    ),
+    repeating-linear-gradient(
+      113deg,
+      transparent 0px,
+      transparent 117px,
+      rgba(200, 230, 255, 0.012) 118px,
+      transparent 120px
+    ),
+    radial-gradient(
+      ellipse 72% 62% at 50% 48%,
+      transparent 62%,
+      rgba(2, 6, 10, 0.28) 84%,
+      rgba(1, 3, 6, 0.72) 100%
+    );
+}
+
+/* 面罩呼吸雾化：底缘周期性极淡的白雾 */
+#hud::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   background: radial-gradient(
-    ellipse 72% 62% at 50% 48%,
-    transparent 62%,
-    rgba(2, 6, 10, 0.28) 84%,
-    rgba(1, 3, 6, 0.72) 100%
+    ellipse 60% 26% at 50% 96%,
+    rgba(210, 235, 250, 0.05) 0%,
+    transparent 70%
   );
+  animation: visor-breath 4.2s ease-in-out infinite;
+}
+@keyframes visor-breath {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  55% {
+    opacity: 1;
+  }
 }
 
 .crosshair {
