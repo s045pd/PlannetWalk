@@ -16,7 +16,8 @@ export interface Rideable {
   enter(): void;
   /** 返回下车点（场景局部） */
   exit(): THREE.Vector3;
-  fixedUpdate(input: Input, h: number): void;
+  /** 每物理步调用；ridden=false 时无输入但仍需维持悬挂/悬浮 */
+  fixedUpdate(input: Input, h: number, ridden: boolean): void;
   update(dt: number): void;
   /** 驾驶时每帧驱动相机 */
   applyCamera(camera: THREE.PerspectiveCamera, mouseDX: number, mouseDY: number): void;
@@ -41,8 +42,8 @@ export class VehicleManager {
   }
 
   fixedUpdate(h: number): void {
+    for (const v of this.vehicles) v.fixedUpdate(this.engine.input, h, v === this.riding);
     if (this.riding) {
-      this.riding.fixedUpdate(this.engine.input, h);
       // 玩家实体跟随载具（维持地形流式加载与 floating origin 的焦点）
       const p = this.riding.getPosition(TMP);
       this.player.teleportLocal(TMP2.set(p.x, p.y + 2, p.z));

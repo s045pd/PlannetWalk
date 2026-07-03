@@ -12,6 +12,9 @@ import { DebrisRing } from './sky/DebrisRing';
 import { PostFX } from './fx/PostFX';
 import { Ruins } from './world/Ruins';
 import { Scatter } from './world/Scatter';
+import { VehicleManager } from './vehicles/Rideable';
+import { Rover } from './vehicles/Rover';
+import { Hovercraft } from './vehicles/Hovercraft';
 import { WeatherSystem } from './weather/WeatherSystem';
 import { Particles } from './weather/Particles';
 import { Lightning } from './weather/Lightning';
@@ -75,9 +78,25 @@ async function init(): Promise<void> {
   player.yaw = Math.atan2(spawnWorld.x - city.x, spawnWorld.z - city.z);
   playerRef = player;
 
+  // 载具停放在出生点旁
+  const vehicles = new VehicleManager(engine, player);
+  const parkDir = new THREE.Vector3(-Math.cos(spawnDir), 0, Math.sin(spawnDir));
+  const roverPos = spawnWorld.clone().addScaledVector(parkDir, 8);
+  roverPos.y = terrain.heightAt(roverPos.x, roverPos.z) + 1.6;
+  const rover = new Rover(engine, physics, roverPos);
+  const hoverPos = spawnWorld.clone().addScaledVector(parkDir, 16);
+  hoverPos.y = terrain.heightAt(hoverPos.x, hoverPos.z) + 2.2;
+  const hovercraft = new Hovercraft(engine, physics, terrain, origin, hoverPos);
+  vehicles.add(rover);
+  vehicles.add(hovercraft);
+  // 地形碰撞就绪前冻结载具，防止坠穿
+  rover.body.setGravityScale(0, false);
+  hovercraft.body.setGravityScale(0, false);
+
   origin.onShift((_, total) => terrain.shiftOrigin(total));
 
   engine.add(player);
+  engine.add(vehicles);
   engine.add(physics);
   engine.add(terrain);
   engine.add(ruins);
@@ -101,6 +120,8 @@ async function init(): Promise<void> {
     const w = player.worldPosition();
     if (terrain.isReadyAround(1) && physics.hasColliderUnder(w.x, w.z)) {
       player.active = true;
+      rover.body.setGravityScale(1, true);
+      hovercraft.body.setGravityScale(1, true);
       window.__game.ready = true;
       clearInterval(gate);
     }
@@ -125,7 +146,20 @@ async function init(): Promise<void> {
   window.__game.teleportToCity = () => {
     window.__game.teleport!(city.x, city.z);
   };
-  window.__game.debug = { engine, sky, dayNight, debrisRing, postfx, physics, ruins, weather };
+  window.__game.debug = {
+    engine,
+    sky,
+    dayNight,
+    debrisRing,
+    postfx,
+    physics,
+    ruins,
+    weather,
+    vehicles,
+    rover,
+    hovercraft,
+    player,
+  };
   window.__game.playerPos = () => {
     const w = player.worldPosition();
     return { x: w.x, y: w.y, z: w.z };

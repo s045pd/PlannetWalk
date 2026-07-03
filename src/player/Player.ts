@@ -4,6 +4,7 @@ import type { Physics } from '../physics/Physics';
 import { CharacterController, EYE_OFFSET } from '../physics/CharacterController';
 import { GRAVITY } from '../physics/Physics';
 import type { FloatingOrigin } from '../world/FloatingOrigin';
+import { stepJetpack, JETPACK, type JetpackState } from './jetpack';
 
 const WALK_SPEED = 3.5;
 const RUN_SPEED = 8;
@@ -26,6 +27,8 @@ export class Player {
   private bobAmp = 0;
   private landDip = 0;
   speed = 0;
+  jetpack: JetpackState = { fuel: 1, sinceUsed: 99 };
+  jetThrusting = false;
 
   constructor(
     private engine: Engine,
@@ -81,6 +84,17 @@ export class Player {
     this.horizVel.lerp(target, Math.min(1, blend));
 
     this.vy -= GRAVITY * h;
+
+    // 喷气背包：空中按住 Space 持续喷射
+    const wantJet = !this.cc.grounded && input.isDown('Space') && this.vy < 6;
+    const jet = stepJetpack(this.jetpack, wantJet, h);
+    this.jetpack = jet.state;
+    this.jetThrusting = jet.thrust > 0 && wantJet;
+    if (this.jetThrusting) {
+      this.vy += JETPACK.accel * h;
+      this.horizVel.lerp(target, Math.min(1, 0.4 * 10 * h)); // 喷射时增强空中操控
+    }
+
     if (this.cc.grounded) {
       if (this.vy < -8) this.landDip = Math.min(0.18, -this.vy * 0.012);
       if (this.vy < 0) this.vy = -1.5; // 贴地
