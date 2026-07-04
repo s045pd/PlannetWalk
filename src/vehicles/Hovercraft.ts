@@ -35,6 +35,8 @@ export class Hovercraft implements Rideable {
   /** 气垫尘环粒子池（main 注入） */
   dust: ParticlePool | null = null;
   private dustTimer = 0;
+  /** 召回自动驾驶目标（场景局部坐标，VehicleManager 驱动） */
+  autopilotTarget: THREE.Vector3 | null = null;
 
   constructor(
     engine: Engine,
@@ -178,6 +180,18 @@ export class Hovercraft implements Rideable {
       true,
     );
     this.body.applyTorqueImpulse({ x: 0, y: yawIn * 900 * h * mass * 0.01, z: 0 }, true);
+
+    // 召回自动驾驶：世界系直推 + 近距减速
+    if (!ridden && this.autopilotTarget) {
+      TMP_V.set(this.autopilotTarget.x - t.x, 0, this.autopilotTarget.z - t.z);
+      const dist = TMP_V.length();
+      if (dist > 1) {
+        TMP_V.normalize();
+        const pow = Math.min(1, dist / 50 + 0.2) * 4200;
+        this.body.applyImpulse({ x: TMP_V.x * pow * h, y: 0, z: TMP_V.z * pow * h }, true);
+        this.thrustLevel = 0.7;
+      }
+    }
   }
 
   update(dt: number): void {

@@ -36,6 +36,8 @@ export class Rover implements Rideable {
   /** 车轮扬尘粒子池（main 注入） */
   dust: ParticlePool | null = null;
   private dustTimer = 0;
+  /** 召回自动驾驶目标（场景局部坐标，VehicleManager 驱动） */
+  autopilotTarget: THREE.Vector3 | null = null;
 
   constructor(
     engine: Engine,
@@ -66,7 +68,7 @@ export class Rover implements Rideable {
       this.vc.setWheelSuspensionCompression(i, 2.2);
       this.vc.setWheelSuspensionRelaxation(i, 2.6);
       this.vc.setWheelMaxSuspensionTravel(i, 0.5);
-      this.vc.setWheelFrictionSlip(i, 2.4);
+      this.vc.setWheelFrictionSlip(i, 3.5);
       this.vc.setWheelSideFrictionStiffness(i, 0.9);
     });
 
@@ -128,21 +130,36 @@ export class Rover implements Rideable {
   fixedUpdate(input: Input, h: number, ridden: boolean): void {
     const stickF = -input.moveAxis.y;
     const stickS = -input.moveAxis.x;
-    const fwd = ridden
+    let fwd = ridden
       ? input.isDown('KeyW')
         ? 1
         : input.isDown('KeyS')
           ? -0.6
           : stickF * (stickF < 0 ? 0.6 : 1)
       : 0;
-    const targetSteer = ridden
+    let targetSteer = ridden
       ? input.isDown('KeyA')
         ? 1
         : input.isDown('KeyD')
           ? -1
           : stickS
       : 0;
-    const brake = ridden ? (input.isDown('Space') ? 18 : 0) : 4; // 停车常刹
+    let brake = ridden ? (input.isDown('Space') ? 18 : 0) : 4; // 停车常刹
+
+    // 召回自动驾驶：朝目标转向 + 距离比例油门
+    if (!ridden && this.autopilotTarget) {
+      const t = this.body.translation();
+      const q = this.body.rotation();
+      TMP_V.set(this.autopilotTarget.x - t.x, 0, this.autopilotTarget.z - t.z);
+      const dist = TMP_V.length();
+      TMP_Q.set(q.x, q.y, q.z, q.w);
+      TMP_V.applyQuaternion(TMP_Q.invert()); // 目标方向转入底盘局部系（前向 +X）
+      const yawErr = Math.atan2(-TMP_V.z, TMP_V.x);
+      targetSteer = Math.max(-1, Math.min(1, yawErr * 1.4));
+      const behind = Math.abs(yawErr) > 2.2;
+      fwd = behind ? 0.35 : Math.min(1, dist / 40 + 0.25);
+      brake = dist < 8 ? 14 : 0;
+    }
 
     const vel = this.body.linvel();
     const speed = Math.hypot(vel.x, vel.y, vel.z);
@@ -151,7 +168,8 @@ export class Rover implements Rideable {
     const maxSteer = 0.55 / (1 + speed * 0.12);
     this.steer += (targetSteer * maxSteer - this.steer) * Math.min(1, h * 10);
 
-    const force = fwd * 2600 * (input.isDown('ShiftLeft') ? 1.6 : 1);
+    // 7000N ≈ 平地 4 m/s²，可爬 ~35° 坡（此前 2600N 上 6° 坡即失速）
+    const force = fwd * 7000 * (input.isDown('ShiftLeft') ? 1.5 : 1);
     for (let i = 0; i < 6; i++) {
       if (i >= 2) this.vc.setWheelEngineForce(i, force / 4);
       if (i < 2) this.vc.setWheelSteering(i, this.steer);

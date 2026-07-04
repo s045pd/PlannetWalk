@@ -100,6 +100,8 @@ async function init(): Promise<void> {
 
   // 载具停放在出生点旁
   const vehicles = new VehicleManager(engine, player);
+  vehicles.terrain = terrain;
+  vehicles.origin = origin;
   const parkDir = new THREE.Vector3(-Math.cos(spawnDir), 0, Math.sin(spawnDir));
   const roverPos = spawnWorld.clone().addScaledVector(parkDir, 8);
   roverPos.y = terrain.heightAt(roverPos.x, roverPos.z) + 1.6;
