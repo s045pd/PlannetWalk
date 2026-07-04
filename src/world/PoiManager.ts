@@ -59,7 +59,7 @@ export class PoiManager {
 
   constructor(
     scene: THREE.Scene,
-    private seed: number,
+    readonly seed: number,
     private hf: Heightfield,
     private origin: FloatingOrigin,
     private physics: Physics,

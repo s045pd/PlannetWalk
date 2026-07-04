@@ -25,6 +25,7 @@ import { LogPickups } from './story/LogPickups';
 import { SignalQuest } from './story/SignalQuest';
 import { Ending } from './story/Ending';
 import { Survey } from './story/Survey';
+import { HoloMap } from './hud/HoloMap';
 import { PoiManager } from './world/PoiManager';
 import { AudioSystem } from './audio/AudioSystem';
 import { Settings, createDebugPanel } from './core/Settings';
@@ -169,6 +170,16 @@ async function init(): Promise<void> {
   const photoMode = new PhotoMode(engine);
   const scanner = new Scanner(engine, player, poiManager, logPickups, origin, terrain.hf);
   const survey = new Survey(engine, player, poiManager, scanner, terrain.hf);
+  const holoMap = new HoloMap(engine, player, terrain.hf, poiManager, survey, quest);
+  holoMap.vehiclesProvider = () => {
+    const rp = rover.body.translation();
+    const hp = hovercraft.body.translation();
+    const off = origin.totalOffset;
+    return [
+      { x: rp.x + off.x, z: rp.z + off.z, kind: 'rover' },
+      { x: hp.x + off.x, z: hp.z + off.z, kind: 'hover' },
+    ];
+  };
   new SettingsMenu(engine, settings, audio, player);
   createDebugPanel(engine);
 
@@ -181,6 +192,7 @@ async function init(): Promise<void> {
     quest.restore(save.questStage);
     ending.restore(save.endingSeen);
     survey.restore(save.surveyedTowers);
+    holoMap.restore(save.visitedChunks);
   }
   const doSave = (): void => {
     if (!window.__game.ready) return;
@@ -196,7 +208,7 @@ async function init(): Promise<void> {
       questStage: quest.stage,
       endingSeen: ending.seen,
       surveyedTowers: [...survey.surveyed],
-      visitedChunks: [],
+      visitedChunks: [...holoMap.visited],
       beacons: [],
       vehicles: { rover: null, hover: null },
       raceBest: {},
@@ -227,6 +239,7 @@ async function init(): Promise<void> {
   engine.add(scanner);
   engine.add(quest);
   engine.add(survey);
+  engine.add(holoMap);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
@@ -295,6 +308,7 @@ async function init(): Promise<void> {
     quest,
     survey,
     ending,
+    holoMap,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();
