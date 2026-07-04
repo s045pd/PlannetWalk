@@ -40,6 +40,10 @@ export class Player {
   flames: ParticlePool | null = null;
   /** 鼠标灵敏度倍率（设置菜单） */
   sensitivity = 1;
+  /** 外部风推（m/s，StormEffects 驱动） */
+  externalPush = new THREE.Vector2(0, 0);
+  /** 低温减速系数（Cold 系统驱动，1=正常） */
+  speedMul = 1;
   private shockTimer = 0;
 
   constructor(
@@ -103,7 +107,9 @@ export class Player {
     wish.addScaledVector(fwd, -input.moveAxis.y);
     wish.addScaledVector(right, input.moveAxis.x);
     if (wish.lengthSq() > 1) wish.normalize();
-    const target = wish.multiplyScalar(input.isDown('ShiftLeft') ? RUN_SPEED : WALK_SPEED);
+    const target = wish.multiplyScalar(
+      (input.isDown('ShiftLeft') ? RUN_SPEED : WALK_SPEED) * this.speedMul,
+    );
 
     // 地面即时响应，空中弱操控
     const blend = this.cc.grounded ? 1 : AIR_CONTROL * 10 * h;
@@ -153,9 +159,9 @@ export class Player {
     }
 
     const actual = this.cc.move({
-      x: this.horizVel.x * h,
+      x: (this.horizVel.x + this.externalPush.x) * h,
       y: this.vy * h,
-      z: this.horizVel.y * h,
+      z: (this.horizVel.y + this.externalPush.y) * h,
     });
     // 头顶碰撞时清零上升速度
     if (this.vy > 0 && actual.y < this.vy * h * 0.5) this.vy = 0;

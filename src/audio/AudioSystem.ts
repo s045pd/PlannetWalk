@@ -58,6 +58,7 @@ export class AudioSystem {
     const helmet = ctx.createBiquadFilter();
     helmet.type = 'lowpass';
     helmet.frequency.value = 3500;
+    this.helmetFilter = helmet;
     this.master = ctx.createGain();
     this.master.gain.value = this.volume;
     this.master.connect(helmet).connect(ctx.destination);
@@ -122,6 +123,17 @@ export class AudioSystem {
     if (this.master) this.master.gain.value = v;
   }
 
+  private muffled = false;
+  private helmetFilter: BiquadFilterNode | null = null;
+
+  /** 掩蔽闷化：风暴中躲进车内/屋檐下，声音变闷变小 */
+  setMuffle(m: boolean): void {
+    this.muffled = m;
+    if (this.ctx && this.helmetFilter) {
+      this.helmetFilter.frequency.setTargetAtTime(m ? 750 : 3500, this.ctx.currentTime, 0.4);
+    }
+  }
+
   /** 信号滴答/确认音：短正弦 beep（音频未启动时静默跳过） */
   beep(freq: number, dur: number, gain: number): void {
     if (!this.ctx) return;
@@ -166,10 +178,15 @@ export class AudioSystem {
     const p = this.weather.params;
     const riding = this.vehicles.riding;
 
-    // 风：随天气风速 + 移动速度
+    // 风：随天气风速 + 移动速度；掩蔽时大幅衰减
     const speed = riding ? 8 : this.player.speed;
     const windAmt = Math.min(1, p.windSpeed / 20 + speed * 0.02);
-    this.wind.gain.gain.setTargetAtTime(0.02 + windAmt * 0.22, this.ctx.currentTime, 0.5);
+    const muffleGain = this.muffled ? 0.3 : 1;
+    this.wind.gain.gain.setTargetAtTime(
+      (0.02 + windAmt * 0.22) * muffleGain,
+      this.ctx.currentTime,
+      0.5,
+    );
     this.wind.filter.frequency.setTargetAtTime(400 + windAmt * 900, this.ctx.currentTime, 0.5);
 
     // 雨

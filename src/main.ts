@@ -35,6 +35,7 @@ import { loadSave, writeSave, clearSave, SAVE_VERSION } from './core/SaveGame';
 import { WeatherSystem } from './weather/WeatherSystem';
 import { Particles } from './weather/Particles';
 import { Lightning } from './weather/Lightning';
+import { StormEffects } from './weather/StormEffects';
 import type { WeatherName } from './weather/weatherStates';
 
 const SEED = 20260703;
@@ -173,6 +174,8 @@ async function init(): Promise<void> {
   const photoMode = new PhotoMode(engine);
   const scanner = new Scanner(engine, player, poiManager, logPickups, origin, terrain.hf);
   const survey = new Survey(engine, player, poiManager, scanner, terrain.hf);
+  const stormEffects = new StormEffects(engine, weather, player, physics, audio, vehicles);
+  hud.storm = stormEffects;
   const holoMap = new HoloMap(engine, player, terrain.hf, poiManager, survey, quest);
   const waypoints = new Waypoints(engine, player, origin);
   hud.waypoints = waypoints;
@@ -248,6 +251,7 @@ async function init(): Promise<void> {
   engine.add(survey);
   engine.add(holoMap);
   engine.add(waypoints);
+  engine.add(stormEffects);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
@@ -318,6 +322,7 @@ async function init(): Promise<void> {
     ending,
     holoMap,
     waypoints,
+    stormEffects,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();

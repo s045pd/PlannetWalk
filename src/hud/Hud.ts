@@ -10,6 +10,7 @@ import type { FloatingOrigin } from '../world/FloatingOrigin';
 import type { LogPickups } from '../story/LogPickups';
 import type { SignalQuest } from '../story/SignalQuest';
 import type { Waypoints } from '../player/Waypoints';
+import type { StormEffects } from '../weather/StormEffects';
 import type { PoiManager } from '../world/PoiManager';
 import { PoiKind } from '../world/poi';
 
@@ -40,6 +41,8 @@ export class Hud {
   quest: SignalQuest | null = null;
   /** 个人信标（main 注入） */
   waypoints: Waypoints | null = null;
+  /** 风暴避难（main 注入） */
+  storm: StormEffects | null = null;
   private wpMarkers: HTMLElement[] = [];
   private updateTimer = 0;
   private typeText = '';
@@ -246,9 +249,15 @@ export class Hud {
 
     this.time.textContent = this.dayNight.clockText();
 
-    // 天气警报
-    const warn =
-      WARN_STATES[this.weather.core.transitioning ? (this.weather.core.target ?? '') : this.weather.core.current];
+    // 天气警报：沙尘暴逼近倒计时 > 掩蔽状态 > 常规警报
+    const core = this.weather.core;
+    let warn =
+      WARN_STATES[core.transitioning ? (core.target ?? '') : core.current];
+    if (core.transitioning && core.target === 'DUST_STORM') {
+      warn = `⚠ 沙尘暴逼近 ${Math.ceil(core.transitionRemaining)}s — 寻找掩蔽`;
+    } else if (this.storm?.storming && this.storm.sheltered) {
+      warn = '◈ 已掩蔽 — 等待风暴过去';
+    }
     this.warning.style.display = warn ? 'block' : 'none';
     if (warn) this.warning.textContent = warn;
 

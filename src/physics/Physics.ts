@@ -46,6 +46,13 @@ export class Physics {
     return this.terrainBodies.has(`${Terrain.toChunk(worldX)},${Terrain.toChunk(worldZ)}`);
   }
 
+  /** 头顶是否有遮蔽（建筑/残骸屋檐）：向上射线，排除指定刚体（通常是玩家自身） */
+  hasRoofAbove(pos: { x: number; y: number; z: number }, exclude?: RAPIER.RigidBody): boolean {
+    const ray = new RAPIER.Ray({ x: pos.x, y: pos.y + 0.2, z: pos.z }, { x: 0, y: 1, z: 0 });
+    const hit = this.world.castRay(ray, 40, true, undefined, undefined, undefined, exclude);
+    return hit !== null;
+  }
+
   private syncTerrainColliders(): void {
     const f = this.getWorldFocus();
     const pcx = Terrain.toChunk(f.x);
