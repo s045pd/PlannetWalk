@@ -204,7 +204,13 @@ export class Hud {
         this.poiMarker.style.display = 'none';
       }
       const kindName =
-        near.site.kind === PoiKind.WRECK ? '残骸' : near.site.kind === PoiKind.TOWER ? '信标塔' : '坠落点';
+        near.site.kind === PoiKind.WRECK
+          ? '残骸'
+          : near.site.kind === PoiKind.TOWER
+            ? '信标塔'
+            : near.site.kind === PoiKind.RACE
+              ? '试炼'
+              : '坠落点';
       this.poiDist.textContent = `◆ ${kindName} ${near.dist >= 1000 ? (near.dist / 1000).toFixed(2) + ' km' : Math.round(near.dist) + ' m'}`;
       this.poiDist.style.display = 'block';
     } else {

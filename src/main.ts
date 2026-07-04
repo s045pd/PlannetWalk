@@ -37,6 +37,7 @@ import { WeatherSystem } from './weather/WeatherSystem';
 import { Particles } from './weather/Particles';
 import { Lightning } from './weather/Lightning';
 import { StormEffects } from './weather/StormEffects';
+import { RaceSystem } from './vehicles/RaceSystem';
 import type { WeatherName } from './weather/weatherStates';
 
 const SEED = 20260703;
@@ -177,6 +178,8 @@ async function init(): Promise<void> {
   const scanner = new Scanner(engine, player, poiManager, logPickups, origin, terrain.hf);
   const survey = new Survey(engine, player, poiManager, scanner, terrain.hf);
   const stormEffects = new StormEffects(engine, weather, player, physics, audio, vehicles);
+  const race = new RaceSystem(engine, hovercraft, vehicles, terrain.hf, origin);
+  race.engineSeed = SEED;
   hud.storm = stormEffects;
   const holoMap = new HoloMap(engine, player, terrain.hf, poiManager, survey, quest);
   const waypoints = new Waypoints(engine, player, origin);
@@ -205,6 +208,7 @@ async function init(): Promise<void> {
     survey.restore(save.surveyedTowers);
     holoMap.restore(save.visitedChunks);
     waypoints.restore(save.beacons);
+    race.restore(save.raceBest);
   }
   const doSave = (): void => {
     if (!window.__game.ready) return;
@@ -223,7 +227,7 @@ async function init(): Promise<void> {
       visitedChunks: [...holoMap.visited],
       beacons: [...waypoints.beacons],
       vehicles: { rover: null, hover: null },
-      raceBest: {},
+      raceBest: race.best,
     });
   };
   setInterval(doSave, 10000);
@@ -255,6 +259,7 @@ async function init(): Promise<void> {
   engine.add(holoMap);
   engine.add(waypoints);
   engine.add(stormEffects);
+  engine.add(race);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
@@ -327,6 +332,7 @@ async function init(): Promise<void> {
     waypoints,
     stormEffects,
     debris,
+    race,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();

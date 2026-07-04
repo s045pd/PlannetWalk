@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { poiSiteAt, nearestPoi, POI_CELL, PoiKind, craterDepth } from '../src/world/poi';
+import {
+  poiSiteAt,
+  nearestPoi,
+  POI_CELL,
+  PoiKind,
+  craterDepth,
+  raceCourse,
+  RACE_RINGS,
+} from '../src/world/poi';
 import { nearestCity } from '../src/world/citySites';
 
 const SEED = 1234;
@@ -13,14 +21,36 @@ describe('poi', () => {
     }
   });
 
-  it('存在三种类型且都能被找到', () => {
+  it('存在四种类型且都能被找到', () => {
     const kinds = new Set<PoiKind>();
     for (let cx = -40; cx <= 40; cx++)
       for (let cz = -40; cz <= 40; cz++) {
         const p = poiSiteAt(SEED, cx, cz);
         if (p) kinds.add(p.kind);
       }
-    expect(kinds.size).toBe(3);
+    expect(kinds.size).toBe(4);
+  });
+
+  it('试炼航线：确定性、环数、间距与递进', () => {
+    let race = null;
+    for (let cx = -40; cx <= 40 && !race; cx++)
+      for (let cz = -40; cz <= 40 && !race; cz++) {
+        const p = poiSiteAt(SEED, cx, cz);
+        if (p && p.kind === PoiKind.RACE) race = p;
+      }
+    expect(race).not.toBeNull();
+    const a = raceCourse(SEED, race!, () => 10);
+    const b = raceCourse(SEED, race!, () => 10);
+    expect(a).toEqual(b);
+    expect(a.length).toBe(RACE_RINGS);
+    let prev = { x: race!.x, z: race!.z };
+    for (const ring of a) {
+      const d = Math.hypot(ring.x - prev.x, ring.z - prev.z);
+      expect(d).toBeGreaterThan(50);
+      expect(d).toBeLessThan(140);
+      expect(ring.y).toBeGreaterThan(10); // 地面(10) 之上
+      prev = ring;
+    }
   });
 
   it('POI 与城市保持距离', () => {

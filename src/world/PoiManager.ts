@@ -234,6 +234,23 @@ export class PoiManager {
         site.z + 6,
         pickLogForSite(this.seed, site.cellX, site.cellZ, 2),
       );
+    } else if (site.kind === PoiKind.RACE) {
+      // 光环试炼起点门：双塔 + 横梁（航线光环由 RaceSystem 装配）
+      geos.push(coloredBox(0.9, 9, 0.9, -5.5, 4.5, 0, CONCRETE));
+      geos.push(coloredBox(0.9, 9, 0.9, 5.5, 4.5, 0, CONCRETE));
+      geos.push(coloredBox(12, 0.9, 0.9, 0, 9, 0, HULL));
+      geos.push(coloredBox(14, 0.4, 6, 0, 0.2, 0, HULL)); // 基座
+      colliderDefs.push({ x: -5.5, y: 4.5, z: 0, hx: 0.45, hy: 4.5, hz: 0.45, rotY: 0 });
+      colliderDefs.push({ x: 5.5, y: 4.5, z: 0, hx: 0.45, hy: 4.5, hz: 0.45, rotY: 0 });
+      beacon = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 8), this.beaconMat);
+      beacon.position.y = 9.8;
+      group.add(beacon);
+      this.logPickups.addSpot(
+        `poi:${key}`,
+        site.x - 8,
+        site.z + 6,
+        pickLogForSite(this.seed, site.cellX, site.cellZ, 2),
+      );
     } else {
       // 陨坑：斜插的巨型环碎片（发光棱缘由 bloom 拾取）
       const shardGeo = new THREE.IcosahedronGeometry(1, 0);
