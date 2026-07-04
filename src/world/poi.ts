@@ -8,6 +8,8 @@ export enum PoiKind {
   WRECK = 0,
   TOWER = 1,
   CRATER = 2,
+  /** 悬浮器光环试炼 */
+  RACE = 3,
 }
 
 export interface PoiSite {
@@ -43,7 +45,14 @@ function computeSite(seed: number, cellX: number, cellZ: number): PoiSite | null
   const rng = mulberry32(hashCell(seed, cellX, cellZ));
   if (rng() > 0.22) return null;
   const kindRoll = rng();
-  const kind = kindRoll < 0.4 ? PoiKind.WRECK : kindRoll < 0.72 ? PoiKind.TOWER : PoiKind.CRATER;
+  const kind =
+    kindRoll < 0.35
+      ? PoiKind.WRECK
+      : kindRoll < 0.62
+        ? PoiKind.TOWER
+        : kindRoll < 0.85
+          ? PoiKind.CRATER
+          : PoiKind.RACE;
   const radius = kind === PoiKind.CRATER ? 55 + rng() * 45 : 40 + rng() * 20;
   const margin = radius + 60;
   const range = POI_CELL - margin * 2;
@@ -74,6 +83,38 @@ export function nearestPoi(seed: number, x: number, z: number, r = 2): PoiSite |
     }
   }
   return best;
+}
+
+export const RACE_RINGS = 8;
+
+export interface RaceRing {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/**
+ * 光环试炼航线：从起点门出发的 8 个顺序光环，方向渐变、离地 6–18m。
+ * heightAt 注入以便测试用常量地形。
+ */
+export function raceCourse(
+  seed: number,
+  site: PoiSite,
+  heightAt: (x: number, z: number) => number,
+): RaceRing[] {
+  const rng = mulberry32(hashCell(seed ^ 0x2ace, site.cellX, site.cellZ));
+  const rings: RaceRing[] = [];
+  let x = site.x;
+  let z = site.z;
+  let dir = site.rot;
+  for (let i = 0; i < RACE_RINGS; i++) {
+    const dist = 65 + rng() * 60;
+    dir += (rng() - 0.5) * 1.1;
+    x += Math.cos(dir) * dist;
+    z += Math.sin(dir) * dist;
+    rings.push({ x, y: heightAt(x, z) + 6 + rng() * 12, z });
+  }
+  return rings;
 }
 
 /**

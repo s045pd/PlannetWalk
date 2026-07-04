@@ -2,6 +2,13 @@ import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
 import type { Input } from '../core/Input';
 import type { Player } from '../player/Player';
+import type { Rover } from './Rover';
+import type { Hovercraft } from './Hovercraft';
+import type { Terrain } from '../world/Terrain';
+import type { FloatingOrigin } from '../world/FloatingOrigin';
+
+/** 可召回载具（自动驾驶目标为场景局部坐标） */
+export type Recallable = Rover | Hovercraft;
 
 export interface VehicleHud {
   title: string;
@@ -31,18 +38,76 @@ export class VehicleManager {
   private vehicles: Rideable[] = [];
   riding: Rideable | null = null;
   nearby: Rideable | null = null;
+  /** 最后乘坐的载具（召回目标） */
+  lastRidden: Rideable | null = null;
+  private recalling: Recallable | null = null;
+  private holdH = 0;
+  private toast: HTMLElement;
+  /** 召回远距传送用（main 注入） */
+  terrain: Terrain | null = null;
+  origin: FloatingOrigin | null = null;
 
   constructor(
     private engine: Engine,
     private player: Player,
-  ) {}
+  ) {
+    this.toast = document.createElement('div');
+    this.toast.style.cssText =
+      'position:fixed;top:200px;left:50%;transform:translateX(-50%);color:#9fe8ff;' +
+      'font:12px monospace;letter-spacing:2px;opacity:0;transition:opacity .4s;z-index:30;pointer-events:none';
+    document.body.appendChild(this.toast);
+  }
+
+  private showToast(text: string): void {
+    this.toast.textContent = text;
+    this.toast.style.opacity = '1';
+    setTimeout(() => (this.toast.style.opacity = '0'), 2600);
+  }
 
   add(v: Rideable): void {
     this.vehicles.push(v);
   }
 
+  /** H 长按召回：>400m 直接"自动驾驶抵达"（传送到玩家后方），近距自动驶来 */
+  private startRecall(): void {
+    const target = (this.lastRidden ?? this.vehicles[0]) as Recallable | null;
+    if (!target || !this.terrain || !this.origin) return;
+    const pp = this.player.localPosition();
+    const vp = target.getPosition(TMP);
+    const dist = vp.distanceTo(pp);
+    if (dist > 400) {
+      const w = this.player.worldPosition();
+      const yaw = this.player.yaw;
+      const bx = w.x + Math.sin(yaw) * 28; // 玩家背后
+      const bz = w.z + Math.cos(yaw) * 28;
+      const by = this.terrain.heightAt(bx, bz) + 2.5;
+      target.body.setTranslation(
+        { x: bx - this.origin.totalOffset.x, y: by, z: bz - this.origin.totalOffset.z },
+        true,
+      );
+      target.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      target.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      this.showToast(`◈ ${target.kind === 'rover' ? '探测车' : '悬浮艇'}自动驾驶抵达`);
+    } else {
+      this.recalling = target;
+      this.showToast(`◈ ${target.kind === 'rover' ? '探测车' : '悬浮艇'}正在驶来 (${Math.round(dist)}m)`);
+    }
+  }
+
   fixedUpdate(h: number): void {
     const locked = this.engine.cameraLock !== null;
+    // 召回中：目标跟随玩家，抵达即停
+    if (this.recalling) {
+      const pp = this.player.localPosition();
+      const vp = this.recalling.getPosition(TMP);
+      if (vp.distanceTo(pp) < 9 || this.riding === this.recalling) {
+        this.recalling.autopilotTarget = null;
+        if (this.riding !== this.recalling) this.showToast('◈ 载具已抵达');
+        this.recalling = null;
+      } else {
+        this.recalling.autopilotTarget = pp;
+      }
+    }
     for (const v of this.vehicles)
       v.fixedUpdate(this.engine.input, h, v === this.riding && !locked);
     if (this.riding) {
@@ -83,10 +148,23 @@ export class VehicleManager {
     }
     if (this.nearby && input.consumePressed('KeyE')) {
       this.riding = this.nearby;
+      this.lastRidden = this.riding;
       this.nearby = null;
       this.riding.enter();
       this.player.setRiding(true);
       this.engine.bus.emit('vehicle:entered', { kind: this.riding.kind });
+      return;
+    }
+
+    // H 长按 1s 召回
+    if (input.isDown('KeyH')) {
+      this.holdH += dt;
+      if (this.holdH >= 1 && this.holdH < 999) {
+        this.holdH = 999; // 触发一次，松开前不重复
+        this.startRecall();
+      }
+    } else {
+      this.holdH = 0;
     }
   }
 }

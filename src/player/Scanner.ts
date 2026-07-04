@@ -21,6 +21,8 @@ export class Scanner {
   private ring: THREE.Mesh;
   private ringT = -1;
   private cooldown = 0;
+  /** 测绘加成：冷却倍率（Survey 驱动） */
+  cooldownMul = 1;
   private markers: Marker[] = [];
   private markerGeo = new THREE.OctahedronGeometry(1.3, 0);
   private poiMat = new THREE.MeshBasicMaterial({
@@ -62,7 +64,7 @@ export class Scanner {
   }
 
   private trigger(): void {
-    this.cooldown = COOLDOWN;
+    this.cooldown = COOLDOWN * this.cooldownMul;
     this.ringT = 0;
     const local = this.player.localPosition();
     this.ring.position.set(local.x, local.y - 1, local.z);

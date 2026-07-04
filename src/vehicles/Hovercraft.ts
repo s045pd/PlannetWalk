@@ -6,6 +6,7 @@ import type { Input } from '../core/Input';
 import type { Terrain } from '../world/Terrain';
 import type { FloatingOrigin } from '../world/FloatingOrigin';
 import { createPid, type Pid } from './pid';
+import { stepEnergy } from './energy';
 import type { Rideable, VehicleHud } from './Rideable';
 import type { ParticlePool } from '../fx/ParticlePool';
 
@@ -35,6 +36,12 @@ export class Hovercraft implements Rideable {
   /** 气垫尘环粒子池（main 注入） */
   dust: ParticlePool | null = null;
   private dustTimer = 0;
+  /** 召回自动驾驶目标（场景局部坐标，VehicleManager 驱动） */
+  autopilotTarget: THREE.Vector3 | null = null;
+  /** 能量 0..1（太阳能回充） */
+  charge = 1;
+  /** 太阳高度（main 每帧注入） */
+  sunElevation = 0;
 
   constructor(
     engine: Engine,
@@ -115,7 +122,8 @@ export class Hovercraft implements Rideable {
       t.z + this.origin.totalOffset.z,
     );
     this.altitude = t.y - groundY;
-    const altFactor = this.altitude > MAX_ALT ? 0.2 : 1; // 限高：升力衰减
+    let altFactor = this.altitude > MAX_ALT ? 0.2 : 1; // 限高：升力衰减
+    if (this.charge <= 0) altFactor = Math.min(altFactor, 0.55); // 空电：缓降不推进
 
     // 四角 PID 悬浮
     for (let i = 0; i < 4; i++) {
@@ -150,11 +158,11 @@ export class Hovercraft implements Rideable {
       true,
     );
 
-    // 推进（未乘坐时仅悬浮）
+    // 推进（未乘坐时仅悬浮）；能量：推进耗电、白天回充、空电无推进
     const boost = ridden && input.isDown('ShiftLeft') ? 1.8 : 1;
     const stickF = -input.moveAxis.y;
     const stickS = -input.moveAxis.x;
-    const fwdIn = ridden
+    let fwdIn = ridden
       ? input.isDown('KeyW')
         ? 1
         : input.isDown('KeyS')
@@ -168,6 +176,9 @@ export class Hovercraft implements Rideable {
           ? -1
           : stickS
       : 0;
+    const throttle = Math.max(Math.abs(fwdIn), this.autopilotTarget && !ridden ? 0.7 : 0);
+    this.charge = stepEnergy(this.charge, throttle, this.sunElevation, h);
+    if (this.charge <= 0) fwdIn = 0;
     this.thrustLevel = Math.abs(fwdIn) * boost;
     const fwd = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
     fwd.y = 0;
@@ -178,6 +189,18 @@ export class Hovercraft implements Rideable {
       true,
     );
     this.body.applyTorqueImpulse({ x: 0, y: yawIn * 900 * h * mass * 0.01, z: 0 }, true);
+
+    // 召回自动驾驶：世界系直推 + 近距减速
+    if (!ridden && this.autopilotTarget) {
+      TMP_V.set(this.autopilotTarget.x - t.x, 0, this.autopilotTarget.z - t.z);
+      const dist = TMP_V.length();
+      if (dist > 1) {
+        TMP_V.normalize();
+        const pow = Math.min(1, dist / 50 + 0.2) * 4200;
+        this.body.applyImpulse({ x: TMP_V.x * pow * h, y: 0, z: TMP_V.z * pow * h }, true);
+        this.thrustLevel = 0.7;
+      }
+    }
   }
 
   update(dt: number): void {
@@ -227,6 +250,7 @@ export class Hovercraft implements Rideable {
       lines: [
         ['离地', `${this.altitude.toFixed(1)} m`],
         ['推力', `${(this.thrustLevel * 100).toFixed(0)}%`],
+        ['电量', `${Math.round(this.charge * 100)}%${this.charge <= 0 ? ' ⚠ 待日照充电' : ''}`],
         ['限高', `${MAX_ALT} m`],
       ],
     };

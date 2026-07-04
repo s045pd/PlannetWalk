@@ -91,10 +91,18 @@ export class DebrisRing {
     scene.add(this.group);
   }
 
+  /** 结局演出：碎带短暂增亮（秒） */
+  boost(seconds: number): void {
+    this.boostLeft = seconds;
+  }
+  private boostLeft = 0;
+
   update(cameraPos: THREE.Vector3, sunElevation: number, dt: number): void {
     this.group.position.copy(cameraPos).add(this.planeOffset);
     this.group.rotation.z += dt * 0.0015; // 碎带缓慢漂移
+    this.boostLeft = Math.max(0, this.boostLeft - dt);
     const night = Math.min(1, Math.max(0, (-sunElevation + 0.1) / 0.3));
-    this.mat.uniforms.uOpacity.value = 0.15 + 0.4 * night;
+    const boost = this.boostLeft > 0 ? 0.45 * Math.min(1, this.boostLeft / 8) : 0;
+    this.mat.uniforms.uOpacity.value = 0.15 + 0.4 * night + boost;
   }
 }

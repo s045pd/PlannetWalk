@@ -45,6 +45,11 @@ export class WeatherCore {
     this.dwellLeft = a + this.rng() * (b - a);
   }
 
+  /** 过渡剩余秒数（预警倒计时用），非过渡期为 0 */
+  get transitionRemaining(): number {
+    return this.transitioning ? Math.max(0, this.transitionDur - this.transitionT) : 0;
+  }
+
   forceTransition(target: WeatherName, duration?: number): void {
     this.from = { ...this.params, tint: [...this.params.tint] };
     this.target = target;

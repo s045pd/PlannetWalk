@@ -14,6 +14,7 @@ import { Aurora } from './sky/Aurora';
 import { PostFX } from './fx/PostFX';
 import { Ruins } from './world/Ruins';
 import { Scatter } from './world/Scatter';
+import { DynamicDebris } from './world/DynamicDebris';
 import { VehicleManager } from './vehicles/Rideable';
 import { Rover } from './vehicles/Rover';
 import { Hovercraft } from './vehicles/Hovercraft';
@@ -22,6 +23,11 @@ import { PhotoMode } from './player/PhotoMode';
 import { Scanner } from './player/Scanner';
 import { ParticlePool } from './fx/ParticlePool';
 import { LogPickups } from './story/LogPickups';
+import { SignalQuest } from './story/SignalQuest';
+import { Ending } from './story/Ending';
+import { Survey } from './story/Survey';
+import { HoloMap } from './hud/HoloMap';
+import { Waypoints } from './player/Waypoints';
 import { PoiManager } from './world/PoiManager';
 import { AudioSystem } from './audio/AudioSystem';
 import { Settings, createDebugPanel } from './core/Settings';
@@ -30,6 +36,9 @@ import { loadSave, writeSave, clearSave, SAVE_VERSION } from './core/SaveGame';
 import { WeatherSystem } from './weather/WeatherSystem';
 import { Particles } from './weather/Particles';
 import { Lightning } from './weather/Lightning';
+import { StormEffects } from './weather/StormEffects';
+import { RaceSystem } from './vehicles/RaceSystem';
+import { ColdSystem } from './player/ColdSystem';
 import type { WeatherName } from './weather/weatherStates';
 
 const SEED = 20260703;
@@ -85,6 +94,7 @@ async function init(): Promise<void> {
   const physics = await Physics.create(terrain, origin, worldFocus);
   const ruins = new Ruins(engine.scene, SEED, terrain.hf, origin, physics, worldFocus);
   const scatter = new Scatter(engine.scene, SEED, terrain.hf, origin, worldFocus);
+  const debris = new DynamicDebris(engine.scene, SEED, terrain.hf, origin, physics, worldFocus);
   const weather = new WeatherSystem(engine, dayNight, sky, terrain);
   const particles = new Particles(engine, weather, SEED);
   const player = new Player(engine, physics, origin, spawnWorld.clone());
@@ -95,6 +105,8 @@ async function init(): Promise<void> {
 
   // 载具停放在出生点旁
   const vehicles = new VehicleManager(engine, player);
+  vehicles.terrain = terrain;
+  vehicles.origin = origin;
   const parkDir = new THREE.Vector3(-Math.cos(spawnDir), 0, Math.sin(spawnDir));
   const roverPos = spawnWorld.clone().addScaledVector(parkDir, 8);
   roverPos.y = terrain.heightAt(roverPos.x, roverPos.z) + 1.6;
@@ -154,9 +166,36 @@ async function init(): Promise<void> {
     poiManager,
   );
   const audio = new AudioSystem(engine, player, weather, vehicles, terrain.hf);
+  // 信号主线：出生城市边缘为路线起点（不受存档出生点影响，保证路线固定）
+  const questSpawn = {
+    x: city.x + Math.cos(spawnDir) * (city.radius + 80),
+    z: city.z + Math.sin(spawnDir) * (city.radius + 80),
+  };
+  const quest = new SignalQuest(engine, SEED, questSpawn, terrain.hf, origin, player, audio);
+  hud.quest = quest;
+  const ending = new Ending(engine, weather, debrisRing);
   const settings = new Settings(engine, dayNight, terrain, particles, postfx);
   const photoMode = new PhotoMode(engine);
   const scanner = new Scanner(engine, player, poiManager, logPickups, origin, terrain.hf);
+  const survey = new Survey(engine, player, poiManager, scanner, terrain.hf);
+  const stormEffects = new StormEffects(engine, weather, player, physics, audio, vehicles);
+  const race = new RaceSystem(engine, hovercraft, vehicles, terrain.hf, origin);
+  race.engineSeed = SEED;
+  const coldSystem = new ColdSystem(engine, player, dayNight, stormEffects);
+  hud.storm = stormEffects;
+  const holoMap = new HoloMap(engine, player, terrain.hf, poiManager, survey, quest);
+  const waypoints = new Waypoints(engine, player, origin);
+  hud.waypoints = waypoints;
+  holoMap.beaconsProvider = () => waypoints.beacons;
+  holoMap.vehiclesProvider = () => {
+    const rp = rover.body.translation();
+    const hp = hovercraft.body.translation();
+    const off = origin.totalOffset;
+    return [
+      { x: rp.x + off.x, z: rp.z + off.z, kind: 'rover' },
+      { x: hp.x + off.x, z: hp.z + off.z, kind: 'hover' },
+    ];
+  };
   new SettingsMenu(engine, settings, audio, player);
   createDebugPanel(engine);
 
@@ -166,6 +205,25 @@ async function init(): Promise<void> {
     weather.setWeather(save.weather as WeatherName, 0.5);
     logPickups.restore(save.collectedLogs, save.usedSpotKeys);
     settings.apply(save.quality);
+    quest.restore(save.questStage);
+    ending.restore(save.endingSeen);
+    survey.restore(save.surveyedTowers);
+    holoMap.restore(save.visitedChunks);
+    waypoints.restore(save.beacons);
+    race.restore(save.raceBest);
+    // 载具位置/电量恢复（此时 totalOffset 为 0，世界坐标即局部坐标）
+    if (save.vehicles.rover) {
+      const v = save.vehicles.rover;
+      const y = Math.max(v.y + 0.5, terrain.heightAt(v.x, v.z) + 1.4);
+      rover.body.setTranslation({ x: v.x, y, z: v.z }, false);
+      rover.charge = v.charge;
+    }
+    if (save.vehicles.hover) {
+      const v = save.vehicles.hover;
+      const y = Math.max(v.y + 0.5, terrain.heightAt(v.x, v.z) + 2.2);
+      hovercraft.body.setTranslation({ x: v.x, y, z: v.z }, false);
+      hovercraft.charge = v.charge;
+    }
   }
   const doSave = (): void => {
     if (!window.__game.ready) return;
@@ -178,6 +236,32 @@ async function init(): Promise<void> {
       collectedLogs: [...logPickups.collected],
       usedSpotKeys: [...logPickups.usedSpotKeys],
       quality: settings.tier,
+      questStage: quest.stage,
+      endingSeen: ending.seen,
+      surveyedTowers: [...survey.surveyed],
+      visitedChunks: [...holoMap.visited],
+      beacons: [...waypoints.beacons],
+      vehicles: {
+        rover: (() => {
+          const t = rover.body.translation();
+          return {
+            x: t.x + origin.totalOffset.x,
+            y: t.y,
+            z: t.z + origin.totalOffset.z,
+            charge: rover.charge,
+          };
+        })(),
+        hover: (() => {
+          const t = hovercraft.body.translation();
+          return {
+            x: t.x + origin.totalOffset.x,
+            y: t.y,
+            z: t.z + origin.totalOffset.z,
+            charge: hovercraft.charge,
+          };
+        })(),
+      },
+      raceBest: race.best,
     });
   };
   setInterval(doSave, 10000);
@@ -191,6 +275,7 @@ async function init(): Promise<void> {
   engine.add(terrain);
   engine.add(ruins);
   engine.add(scatter);
+  engine.add(debris);
   engine.add(dayNight);
   engine.add(weather);
   engine.add(particles);
@@ -203,11 +288,20 @@ async function init(): Promise<void> {
   engine.add(settings);
   engine.add(photoMode);
   engine.add(scanner);
+  engine.add(quest);
+  engine.add(survey);
+  engine.add(holoMap);
+  engine.add(waypoints);
+  engine.add(stormEffects);
+  engine.add(race);
+  engine.add(coldSystem);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
       debrisRing.update(engine.camera.position, dayNight.sunElevation, dt);
       ruins.setNightFactor(smoothstep(0.05, -0.12, dayNight.sunElevation));
+      rover.sunElevation = dayNight.sunElevation;
+      hovercraft.sunElevation = dayNight.sunElevation;
       origin.check(player.localPosition());
     },
   });
@@ -268,6 +362,15 @@ async function init(): Promise<void> {
     origin,
     lightning,
     scanner,
+    quest,
+    survey,
+    ending,
+    holoMap,
+    waypoints,
+    stormEffects,
+    debris,
+    race,
+    coldSystem,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();

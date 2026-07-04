@@ -8,6 +8,9 @@ import type { WeatherSystem } from '../weather/WeatherSystem';
 import type { VehicleManager } from '../vehicles/Rideable';
 import type { FloatingOrigin } from '../world/FloatingOrigin';
 import type { LogPickups } from '../story/LogPickups';
+import type { SignalQuest } from '../story/SignalQuest';
+import type { Waypoints } from '../player/Waypoints';
+import type { StormEffects } from '../weather/StormEffects';
 import type { PoiManager } from '../world/PoiManager';
 import { PoiKind } from '../world/poi';
 
@@ -34,6 +37,13 @@ export class Hud {
   private poiDist: HTMLElement;
   /** 天气玩法：沙尘暴中罗盘失灵（C2 接线） */
   compassScramble = 0;
+  /** 信号主线（main 注入） */
+  quest: SignalQuest | null = null;
+  /** 个人信标（main 注入） */
+  waypoints: Waypoints | null = null;
+  /** 风暴避难（main 注入） */
+  storm: StormEffects | null = null;
+  private wpMarkers: HTMLElement[] = [];
   private updateTimer = 0;
   private typeText = '';
   private typeShown = 0;
@@ -74,16 +84,16 @@ export class Hud {
     this.poiMarker = this.el.querySelector('.poi-marker')!;
     this.poiDist = this.el.querySelector('.poi-dist')!;
 
-    // 日志拾取 → 打字机呈现
+    // 日志拾取 / 任务获取 → 打字机呈现
     engine.bus.on('log:collected', ({ title, body, already, count, total }) => {
-      const titleEl = this.logPanel.querySelector('.log-title')!;
-      titleEl.innerHTML = `${title}<span class="log-tag">${already ? '已收录 · ' : ''}日志 ${String(count).padStart(2, '0')}/${total}</span>`;
-      this.typeText = body;
-      this.typeShown = 0;
-      this.logHold = 7;
-      this.logPanel.style.display = 'block';
-      this.logPanel.classList.remove('done');
-      this.logPanel.style.opacity = '1';
+      this.showTypewriter(
+        title,
+        `${already ? '已收录 · ' : ''}日志 ${String(count).padStart(2, '0')}/${total}`,
+        body,
+      );
+    });
+    engine.bus.on('quest:acquired', ({ title, body, stage, total }) => {
+      this.showTypewriter(title, `信号 ${stage}/${total}`, body, 10);
     });
 
     // 罗盘刻度带（3 组循环以覆盖平移）
@@ -103,6 +113,17 @@ export class Hud {
         clearInterval(dismiss);
       }
     }, 300);
+  }
+
+  private showTypewriter(title: string, tag: string, body: string, hold = 7): void {
+    const titleEl = this.logPanel.querySelector('.log-title')!;
+    titleEl.innerHTML = `${title}<span class="log-tag">${tag}</span>`;
+    this.typeText = body;
+    this.typeShown = 0;
+    this.logHold = hold;
+    this.logPanel.style.display = 'block';
+    this.logPanel.classList.remove('done');
+    this.logPanel.style.opacity = '1';
   }
 
   update(dt: number): void {
@@ -139,6 +160,35 @@ export class Hud {
     this.tape.style.transform = `translateX(${160 - 60 * 8 - px + 30}px)`;
     this.tape.style.opacity = this.compassScramble > 0.5 ? '0.4' : '1';
 
+    // 个人信标：罗盘小三角（惰性创建 3 个标记元素）
+    const wpos = this.player.worldPosition();
+    if (this.waypoints) {
+      while (this.wpMarkers.length < 3) {
+        const m = document.createElement('div');
+        m.className = 'wp-marker';
+        m.textContent = '▲';
+        this.el.querySelector('.compass')!.appendChild(m);
+        this.wpMarkers.push(m);
+      }
+      this.wpMarkers.forEach((m, i) => {
+        const b = this.waypoints!.beacons[i];
+        if (!b || this.compassScramble >= 0.5) {
+          m.style.display = 'none';
+          return;
+        }
+        let delta = Math.atan2(b.x - wpos.x, b.z - wpos.z) - yaw;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        const deg = (delta * 180) / Math.PI;
+        if (Math.abs(deg) < 110) {
+          m.style.display = 'block';
+          m.style.left = `${160 - deg * (60 / 45) - 4}px`;
+        } else {
+          m.style.display = 'none';
+        }
+      });
+    }
+
     // POI 信标：罗盘上的菱形标记 + 距离
     const w = this.player.worldPosition();
     const near = this.poi.nearestFrom(w.x, w.z);
@@ -154,7 +204,13 @@ export class Hud {
         this.poiMarker.style.display = 'none';
       }
       const kindName =
-        near.site.kind === PoiKind.WRECK ? '残骸' : near.site.kind === PoiKind.TOWER ? '信标塔' : '坠落点';
+        near.site.kind === PoiKind.WRECK
+          ? '残骸'
+          : near.site.kind === PoiKind.TOWER
+            ? '信标塔'
+            : near.site.kind === PoiKind.RACE
+              ? '试炼'
+              : '坠落点';
       this.poiDist.textContent = `◆ ${kindName} ${near.dist >= 1000 ? (near.dist / 1000).toFixed(2) + ' km' : Math.round(near.dist) + ' m'}`;
       this.poiDist.style.display = 'block';
     } else {
@@ -178,10 +234,19 @@ export class Hud {
       const w = this.player.worldPosition();
       const ground = this.terrain.heightAt(w.x, w.z);
       const fuelPct = Math.round(this.player.jetpack.fuel * 100);
+      let signalRow = '';
+      if (this.quest && !this.quest.done) {
+        const s = this.quest.strength;
+        const bars = '▁▂▃▄▅▆▇█';
+        const n = Math.round(s * 7);
+        let meter = '';
+        for (let i = 0; i <= n; i++) meter += bars[i];
+        signalRow = `<div class="row"><span class="label">信号</span><span>${s < 0.02 ? '···' : meter} ${Math.round(s * 100)}%</span></div>`;
+      }
       this.left.innerHTML = `
         <div class="row"><span class="label">速度</span><span>${this.player.speed.toFixed(1)} m/s</span></div>
         <div class="row"><span class="label">海拔</span><span>${w.y.toFixed(0)} m</span></div>
-        <div class="row"><span class="label">离地</span><span>${Math.max(0, w.y - ground).toFixed(1)} m</span></div>`;
+        <div class="row"><span class="label">离地</span><span>${Math.max(0, w.y - ground).toFixed(1)} m</span></div>${signalRow}`;
       this.right.innerHTML = `
         <div class="row"><span class="label">喷气燃料</span><span>${fuelPct}%</span></div>
         <div class="fuel-bar ${fuelPct < 20 ? 'fuel-low' : ''}"><i style="width:${fuelPct}%"></i></div>`;
@@ -190,9 +255,15 @@ export class Hud {
 
     this.time.textContent = this.dayNight.clockText();
 
-    // 天气警报
-    const warn =
-      WARN_STATES[this.weather.core.transitioning ? (this.weather.core.target ?? '') : this.weather.core.current];
+    // 天气警报：沙尘暴逼近倒计时 > 掩蔽状态 > 常规警报
+    const core = this.weather.core;
+    let warn =
+      WARN_STATES[core.transitioning ? (core.target ?? '') : core.current];
+    if (core.transitioning && core.target === 'DUST_STORM') {
+      warn = `⚠ 沙尘暴逼近 ${Math.ceil(core.transitionRemaining)}s — 寻找掩蔽`;
+    } else if (this.storm?.storming && this.storm.sheltered) {
+      warn = '◈ 已掩蔽 — 等待风暴过去';
+    }
     this.warning.style.display = warn ? 'block' : 'none';
     if (warn) this.warning.textContent = warn;
 
