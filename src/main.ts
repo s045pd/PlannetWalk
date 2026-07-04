@@ -209,6 +209,19 @@ async function init(): Promise<void> {
     holoMap.restore(save.visitedChunks);
     waypoints.restore(save.beacons);
     race.restore(save.raceBest);
+    // 载具位置/电量恢复（此时 totalOffset 为 0，世界坐标即局部坐标）
+    if (save.vehicles.rover) {
+      const v = save.vehicles.rover;
+      const y = Math.max(v.y + 0.5, terrain.heightAt(v.x, v.z) + 1.4);
+      rover.body.setTranslation({ x: v.x, y, z: v.z }, false);
+      rover.charge = v.charge;
+    }
+    if (save.vehicles.hover) {
+      const v = save.vehicles.hover;
+      const y = Math.max(v.y + 0.5, terrain.heightAt(v.x, v.z) + 2.2);
+      hovercraft.body.setTranslation({ x: v.x, y, z: v.z }, false);
+      hovercraft.charge = v.charge;
+    }
   }
   const doSave = (): void => {
     if (!window.__game.ready) return;
@@ -226,7 +239,26 @@ async function init(): Promise<void> {
       surveyedTowers: [...survey.surveyed],
       visitedChunks: [...holoMap.visited],
       beacons: [...waypoints.beacons],
-      vehicles: { rover: null, hover: null },
+      vehicles: {
+        rover: (() => {
+          const t = rover.body.translation();
+          return {
+            x: t.x + origin.totalOffset.x,
+            y: t.y,
+            z: t.z + origin.totalOffset.z,
+            charge: rover.charge,
+          };
+        })(),
+        hover: (() => {
+          const t = hovercraft.body.translation();
+          return {
+            x: t.x + origin.totalOffset.x,
+            y: t.y,
+            z: t.z + origin.totalOffset.z,
+            charge: hovercraft.charge,
+          };
+        })(),
+      },
       raceBest: race.best,
     });
   };
@@ -265,6 +297,8 @@ async function init(): Promise<void> {
       stars.update(engine.camera.position, dayNight.sunElevation);
       debrisRing.update(engine.camera.position, dayNight.sunElevation, dt);
       ruins.setNightFactor(smoothstep(0.05, -0.12, dayNight.sunElevation));
+      rover.sunElevation = dayNight.sunElevation;
+      hovercraft.sunElevation = dayNight.sunElevation;
       origin.check(player.localPosition());
     },
   });

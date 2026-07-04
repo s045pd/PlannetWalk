@@ -4,6 +4,7 @@ import type { Engine } from '../core/Engine';
 import type { Physics } from '../physics/Physics';
 import type { Input } from '../core/Input';
 import type { Rideable, VehicleHud } from './Rideable';
+import { stepEnergy } from './energy';
 import type { ParticlePool } from '../fx/ParticlePool';
 
 const DUST_COLOR = new THREE.Color(0.62, 0.5, 0.36);
@@ -38,6 +39,10 @@ export class Rover implements Rideable {
   private dustTimer = 0;
   /** 召回自动驾驶目标（场景局部坐标，VehicleManager 驱动） */
   autopilotTarget: THREE.Vector3 | null = null;
+  /** 能量 0..1（太阳能回充） */
+  charge = 1;
+  /** 太阳高度（main 每帧注入） */
+  sunElevation = 0;
 
   constructor(
     engine: Engine,
@@ -168,6 +173,10 @@ export class Rover implements Rideable {
     const maxSteer = 0.55 / (1 + speed * 0.12);
     this.steer += (targetSteer * maxSteer - this.steer) * Math.min(1, h * 10);
 
+    // 能量：油门耗电、白天太阳能回充；空电无动力
+    this.charge = stepEnergy(this.charge, Math.abs(fwd), this.sunElevation, h);
+    if (this.charge <= 0) fwd = 0;
+
     // 7000N ≈ 平地 4 m/s²，可爬 ~35° 坡（此前 2600N 上 6° 坡即失速）
     const force = fwd * 7000 * (input.isDown('ShiftLeft') ? 1.5 : 1);
     for (let i = 0; i < 6; i++) {
@@ -253,6 +262,7 @@ export class Rover implements Rideable {
       title: 'ROVER — 六轮探测车',
       lines: [
         ['速度', `${this.speedKmh.toFixed(0)} km/h`],
+        ['电量', `${Math.round(this.charge * 100)}%${this.charge <= 0 ? ' ⚠ 待日照充电' : ''}`],
         ['大灯 [L]', this.lightsOn ? 'ON' : 'OFF'],
         ['复位 [R] · 刹车 [Space]', ''],
       ],
