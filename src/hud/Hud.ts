@@ -9,6 +9,7 @@ import type { VehicleManager } from '../vehicles/Rideable';
 import type { FloatingOrigin } from '../world/FloatingOrigin';
 import type { LogPickups } from '../story/LogPickups';
 import type { SignalQuest } from '../story/SignalQuest';
+import type { Waypoints } from '../player/Waypoints';
 import type { PoiManager } from '../world/PoiManager';
 import { PoiKind } from '../world/poi';
 
@@ -37,6 +38,9 @@ export class Hud {
   compassScramble = 0;
   /** 信号主线（main 注入） */
   quest: SignalQuest | null = null;
+  /** 个人信标（main 注入） */
+  waypoints: Waypoints | null = null;
+  private wpMarkers: HTMLElement[] = [];
   private updateTimer = 0;
   private typeText = '';
   private typeShown = 0;
@@ -152,6 +156,35 @@ export class Hud {
     const px = (yawDeg / 360) * (60 * 8);
     this.tape.style.transform = `translateX(${160 - 60 * 8 - px + 30}px)`;
     this.tape.style.opacity = this.compassScramble > 0.5 ? '0.4' : '1';
+
+    // 个人信标：罗盘小三角（惰性创建 3 个标记元素）
+    const wpos = this.player.worldPosition();
+    if (this.waypoints) {
+      while (this.wpMarkers.length < 3) {
+        const m = document.createElement('div');
+        m.className = 'wp-marker';
+        m.textContent = '▲';
+        this.el.querySelector('.compass')!.appendChild(m);
+        this.wpMarkers.push(m);
+      }
+      this.wpMarkers.forEach((m, i) => {
+        const b = this.waypoints!.beacons[i];
+        if (!b || this.compassScramble >= 0.5) {
+          m.style.display = 'none';
+          return;
+        }
+        let delta = Math.atan2(b.x - wpos.x, b.z - wpos.z) - yaw;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        const deg = (delta * 180) / Math.PI;
+        if (Math.abs(deg) < 110) {
+          m.style.display = 'block';
+          m.style.left = `${160 - deg * (60 / 45) - 4}px`;
+        } else {
+          m.style.display = 'none';
+        }
+      });
+    }
 
     // POI 信标：罗盘上的菱形标记 + 距离
     const w = this.player.worldPosition();

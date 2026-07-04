@@ -26,6 +26,7 @@ import { SignalQuest } from './story/SignalQuest';
 import { Ending } from './story/Ending';
 import { Survey } from './story/Survey';
 import { HoloMap } from './hud/HoloMap';
+import { Waypoints } from './player/Waypoints';
 import { PoiManager } from './world/PoiManager';
 import { AudioSystem } from './audio/AudioSystem';
 import { Settings, createDebugPanel } from './core/Settings';
@@ -171,6 +172,9 @@ async function init(): Promise<void> {
   const scanner = new Scanner(engine, player, poiManager, logPickups, origin, terrain.hf);
   const survey = new Survey(engine, player, poiManager, scanner, terrain.hf);
   const holoMap = new HoloMap(engine, player, terrain.hf, poiManager, survey, quest);
+  const waypoints = new Waypoints(engine, player, origin);
+  hud.waypoints = waypoints;
+  holoMap.beaconsProvider = () => waypoints.beacons;
   holoMap.vehiclesProvider = () => {
     const rp = rover.body.translation();
     const hp = hovercraft.body.translation();
@@ -193,6 +197,7 @@ async function init(): Promise<void> {
     ending.restore(save.endingSeen);
     survey.restore(save.surveyedTowers);
     holoMap.restore(save.visitedChunks);
+    waypoints.restore(save.beacons);
   }
   const doSave = (): void => {
     if (!window.__game.ready) return;
@@ -209,7 +214,7 @@ async function init(): Promise<void> {
       endingSeen: ending.seen,
       surveyedTowers: [...survey.surveyed],
       visitedChunks: [...holoMap.visited],
-      beacons: [],
+      beacons: [...waypoints.beacons],
       vehicles: { rover: null, hover: null },
       raceBest: {},
     });
@@ -240,6 +245,7 @@ async function init(): Promise<void> {
   engine.add(quest);
   engine.add(survey);
   engine.add(holoMap);
+  engine.add(waypoints);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
@@ -309,6 +315,7 @@ async function init(): Promise<void> {
     survey,
     ending,
     holoMap,
+    waypoints,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();

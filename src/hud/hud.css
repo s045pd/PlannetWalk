@@ -111,6 +111,13 @@
   color: #ffb36b;
   text-shadow: 0 0 6px rgba(255, 150, 80, 0.8);
 }
+.wp-marker {
+  position: absolute;
+  top: 13px;
+  font-size: 9px;
+  color: #78ffa0;
+  text-shadow: 0 0 5px rgba(120, 255, 160, 0.8);
+}
 .poi-dist {
   position: absolute;
   top: 52px;
