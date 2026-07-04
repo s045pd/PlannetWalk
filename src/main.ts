@@ -38,6 +38,7 @@ import { Particles } from './weather/Particles';
 import { Lightning } from './weather/Lightning';
 import { StormEffects } from './weather/StormEffects';
 import { RaceSystem } from './vehicles/RaceSystem';
+import { ColdSystem } from './player/ColdSystem';
 import type { WeatherName } from './weather/weatherStates';
 
 const SEED = 20260703;
@@ -180,6 +181,7 @@ async function init(): Promise<void> {
   const stormEffects = new StormEffects(engine, weather, player, physics, audio, vehicles);
   const race = new RaceSystem(engine, hovercraft, vehicles, terrain.hf, origin);
   race.engineSeed = SEED;
+  const coldSystem = new ColdSystem(engine, player, dayNight, stormEffects);
   hud.storm = stormEffects;
   const holoMap = new HoloMap(engine, player, terrain.hf, poiManager, survey, quest);
   const waypoints = new Waypoints(engine, player, origin);
@@ -292,6 +294,7 @@ async function init(): Promise<void> {
   engine.add(waypoints);
   engine.add(stormEffects);
   engine.add(race);
+  engine.add(coldSystem);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
@@ -367,6 +370,7 @@ async function init(): Promise<void> {
     stormEffects,
     debris,
     race,
+    coldSystem,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();
