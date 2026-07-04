@@ -14,6 +14,7 @@ import { Aurora } from './sky/Aurora';
 import { PostFX } from './fx/PostFX';
 import { Ruins } from './world/Ruins';
 import { Scatter } from './world/Scatter';
+import { DynamicDebris } from './world/DynamicDebris';
 import { VehicleManager } from './vehicles/Rideable';
 import { Rover } from './vehicles/Rover';
 import { Hovercraft } from './vehicles/Hovercraft';
@@ -91,6 +92,7 @@ async function init(): Promise<void> {
   const physics = await Physics.create(terrain, origin, worldFocus);
   const ruins = new Ruins(engine.scene, SEED, terrain.hf, origin, physics, worldFocus);
   const scatter = new Scatter(engine.scene, SEED, terrain.hf, origin, worldFocus);
+  const debris = new DynamicDebris(engine.scene, SEED, terrain.hf, origin, physics, worldFocus);
   const weather = new WeatherSystem(engine, dayNight, sky, terrain);
   const particles = new Particles(engine, weather, SEED);
   const player = new Player(engine, physics, origin, spawnWorld.clone());
@@ -235,6 +237,7 @@ async function init(): Promise<void> {
   engine.add(terrain);
   engine.add(ruins);
   engine.add(scatter);
+  engine.add(debris);
   engine.add(dayNight);
   engine.add(weather);
   engine.add(particles);
@@ -323,6 +326,7 @@ async function init(): Promise<void> {
     holoMap,
     waypoints,
     stormEffects,
+    debris,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();
