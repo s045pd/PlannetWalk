@@ -91,6 +91,11 @@ export class PoiManager {
     return out;
   }
 
+  /** 按 cell 取站点（测绘/地图用） */
+  siteAtCell(cx: number, cz: number): PoiSite | null {
+    return poiSiteAt(this.seed, cx, cz);
+  }
+
   /** 供 HUD 罗盘信标查询：最近 POI（世界坐标） */
   nearestFrom(x: number, z: number): { site: PoiSite; dist: number; bearing: number } | null {
     let best: PoiSite | null = null;

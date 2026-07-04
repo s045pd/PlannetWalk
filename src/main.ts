@@ -23,6 +23,8 @@ import { Scanner } from './player/Scanner';
 import { ParticlePool } from './fx/ParticlePool';
 import { LogPickups } from './story/LogPickups';
 import { SignalQuest } from './story/SignalQuest';
+import { Ending } from './story/Ending';
+import { Survey } from './story/Survey';
 import { PoiManager } from './world/PoiManager';
 import { AudioSystem } from './audio/AudioSystem';
 import { Settings, createDebugPanel } from './core/Settings';
@@ -162,9 +164,11 @@ async function init(): Promise<void> {
   };
   const quest = new SignalQuest(engine, SEED, questSpawn, terrain.hf, origin, player, audio);
   hud.quest = quest;
+  const ending = new Ending(engine, weather, debrisRing);
   const settings = new Settings(engine, dayNight, terrain, particles, postfx);
   const photoMode = new PhotoMode(engine);
   const scanner = new Scanner(engine, player, poiManager, logPickups, origin, terrain.hf);
+  const survey = new Survey(engine, player, poiManager, scanner, terrain.hf);
   new SettingsMenu(engine, settings, audio, player);
   createDebugPanel(engine);
 
@@ -175,6 +179,8 @@ async function init(): Promise<void> {
     logPickups.restore(save.collectedLogs, save.usedSpotKeys);
     settings.apply(save.quality);
     quest.restore(save.questStage);
+    ending.restore(save.endingSeen);
+    survey.restore(save.surveyedTowers);
   }
   const doSave = (): void => {
     if (!window.__game.ready) return;
@@ -188,8 +194,8 @@ async function init(): Promise<void> {
       usedSpotKeys: [...logPickups.usedSpotKeys],
       quality: settings.tier,
       questStage: quest.stage,
-      endingSeen: false,
-      surveyedTowers: [],
+      endingSeen: ending.seen,
+      surveyedTowers: [...survey.surveyed],
       visitedChunks: [],
       beacons: [],
       vehicles: { rover: null, hover: null },
@@ -220,6 +226,7 @@ async function init(): Promise<void> {
   engine.add(photoMode);
   engine.add(scanner);
   engine.add(quest);
+  engine.add(survey);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
@@ -286,6 +293,8 @@ async function init(): Promise<void> {
     lightning,
     scanner,
     quest,
+    survey,
+    ending,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();
