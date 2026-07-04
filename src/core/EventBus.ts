@@ -9,6 +9,7 @@ export interface Events {
   'player:step': { biome: number };
   'weather:lightning': { delaySec: number };
   'player:shocked': { intensity: number };
+  'quest:acquired': { title: string; body: string; stage: number; total: number };
   'log:collected': {
     id: string;
     title: string;

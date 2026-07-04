@@ -22,6 +22,7 @@ import { PhotoMode } from './player/PhotoMode';
 import { Scanner } from './player/Scanner';
 import { ParticlePool } from './fx/ParticlePool';
 import { LogPickups } from './story/LogPickups';
+import { SignalQuest } from './story/SignalQuest';
 import { PoiManager } from './world/PoiManager';
 import { AudioSystem } from './audio/AudioSystem';
 import { Settings, createDebugPanel } from './core/Settings';
@@ -154,6 +155,13 @@ async function init(): Promise<void> {
     poiManager,
   );
   const audio = new AudioSystem(engine, player, weather, vehicles, terrain.hf);
+  // 信号主线：出生城市边缘为路线起点（不受存档出生点影响，保证路线固定）
+  const questSpawn = {
+    x: city.x + Math.cos(spawnDir) * (city.radius + 80),
+    z: city.z + Math.sin(spawnDir) * (city.radius + 80),
+  };
+  const quest = new SignalQuest(engine, SEED, questSpawn, terrain.hf, origin, player, audio);
+  hud.quest = quest;
   const settings = new Settings(engine, dayNight, terrain, particles, postfx);
   const photoMode = new PhotoMode(engine);
   const scanner = new Scanner(engine, player, poiManager, logPickups, origin, terrain.hf);
@@ -166,6 +174,7 @@ async function init(): Promise<void> {
     weather.setWeather(save.weather as WeatherName, 0.5);
     logPickups.restore(save.collectedLogs, save.usedSpotKeys);
     settings.apply(save.quality);
+    quest.restore(save.questStage);
   }
   const doSave = (): void => {
     if (!window.__game.ready) return;
@@ -178,6 +187,13 @@ async function init(): Promise<void> {
       collectedLogs: [...logPickups.collected],
       usedSpotKeys: [...logPickups.usedSpotKeys],
       quality: settings.tier,
+      questStage: quest.stage,
+      endingSeen: false,
+      surveyedTowers: [],
+      visitedChunks: [],
+      beacons: [],
+      vehicles: { rover: null, hover: null },
+      raceBest: {},
     });
   };
   setInterval(doSave, 10000);
@@ -203,6 +219,7 @@ async function init(): Promise<void> {
   engine.add(settings);
   engine.add(photoMode);
   engine.add(scanner);
+  engine.add(quest);
   engine.add({
     update(dt) {
       stars.update(engine.camera.position, dayNight.sunElevation);
@@ -268,6 +285,7 @@ async function init(): Promise<void> {
     origin,
     lightning,
     scanner,
+    quest,
   };
   window.__game.playerPos = () => {
     const w = player.worldPosition();

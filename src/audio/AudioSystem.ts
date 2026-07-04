@@ -122,6 +122,21 @@ export class AudioSystem {
     if (this.master) this.master.gain.value = v;
   }
 
+  /** 信号滴答/确认音：短正弦 beep（音频未启动时静默跳过） */
+  beep(freq: number, dur: number, gain: number): void {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gain, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    osc.connect(g).connect(this.master);
+    osc.start();
+    osc.stop(ctx.currentTime + dur + 0.02);
+  }
+
   /** 短噪声 burst（脚步/雷/落地共用） */
   private burst(dur: number, freq: number, gain: number, type: BiquadFilterType = 'lowpass', brown = false): void {
     if (!this.ctx) return;
